@@ -1,9 +1,9 @@
-from Bio import SeqIO
 import sys, os
 import gzip
 from collections import defaultdict
 import csv
 from sklearn.feature_extraction import DictVectorizer
+from sklearn.preprocessing import MultiLabelBinarizer
 
 def loadTerms(inPath, proteins):
     print "Loading terms from", inPath
@@ -19,22 +19,33 @@ def loadTerms(inPath, proteins):
 def loadSequences(inPath, proteins):
     print "Loading sequences from", inPath
     with gzip.open(inPath, "rt") as f:
-        sequences = SeqIO.parse(f, 'fasta')
-        for seq in sequences:
-            proteins[seq.id]["seq"] = seq
+        header = None
+        for line in f:
+            if header == None:
+                assert line.startswith(">")
+                header = line[1:].strip()
+            else:
+                proteins[header]["seq"] = line.strip()
+                header = None
             #print seq.id, seq.seq
 
 def buildExamples(proteins):
     print "Building examples"
-    for protId in sorted(proteins.keys()):
-        print "Processing", protId
+    X = []
+    y = []
+    mlb = MultiLabelBinarizer()
+    for protId in sorted(proteins.keys()[0:10]):
+        #print "Processing", protId
         protein = proteins[protId]
+        # Build features
         features = {}
-        seq = protein["seq"].seq
+        seq = protein["seq"]
         for i in range(len(seq)-3):
             feature = seq[i:i+3]
             features[feature] = 1
-        print features
+        #print features
+        # Build labels
+        y.append( sorted(protein["terms"].keys())
         example = DictVectorizer(sparse=False).fit_transform(features)
             
 

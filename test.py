@@ -4,6 +4,8 @@ from collections import defaultdict
 import csv
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.grid_search import GridSearchCV
+from sklearn.ensemble.forest import ExtraTreesClassifier
 
 def loadTerms(inPath, proteins):
     print "Loading terms from", inPath
@@ -29,12 +31,16 @@ def loadSequences(inPath, proteins):
                 header = None
             #print seq.id, seq.seq
 
-def buildExamples(proteins):
+def buildExamples(proteins, limit=None):
     print "Building examples"
-    X = []
     y = []
+    X = []
     mlb = MultiLabelBinarizer()
-    for protId in sorted(proteins.keys()[0:10]):
+    dv = DictVectorizer(sparse=True)
+    protIds = sorted(proteins.keys())
+    if limit:
+        protIds = protIds[0:limit]
+    for protId in protIds:
         #print "Processing", protId
         protein = proteins[protId]
         # Build features
@@ -45,16 +51,24 @@ def buildExamples(proteins):
             features[feature] = 1
         #print features
         # Build labels
-        y.append( sorted(protein["terms"].keys())
-        example = DictVectorizer(sparse=False).fit_transform(features)
-            
+        y.append(mlb.fit_transform(sorted(protein["terms"].keys())))
+        X.append(dv.fit_transform(features))
+    return y, X
+
+def classify(y, X, verbose=2):
+    clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose)
+    clf.fit(X, y)
+    print "Best params", (clf.best_params_, clf.best_score_)
 
 def run(dataPath):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
     print proteins["14310_ARATH"]
-    buildExamples(proteins)
+    y, X = buildExamples(proteins, 100)
+    print y
+    print X
+    classify(y, X)
 
 if __name__=="__main__":       
     from optparse import OptionParser

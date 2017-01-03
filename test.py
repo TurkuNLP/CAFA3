@@ -6,9 +6,11 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.grid_search import GridSearchCV
 from sklearn.ensemble.forest import ExtraTreesClassifier
+import operator
 
 def loadTerms(inPath, proteins):
     print "Loading terms from", inPath
+    counts = defaultdict(int)
     with gzip.open(inPath, "rt") as f:
         tsv = csv.reader(f, delimiter='\t')
         for row in tsv:
@@ -17,6 +19,8 @@ def loadTerms(inPath, proteins):
             if "terms" not in protein:
                 protein["terms"] = {}
             protein["terms"][goTerm] = evCode
+            counts[goTerm] += 1
+    return counts
 
 def loadSequences(inPath, proteins):
     print "Loading sequences from", inPath
@@ -31,7 +35,7 @@ def loadSequences(inPath, proteins):
                 header = None
             #print seq.id, seq.seq
 
-def buildExamples(proteins, limit=None):
+def buildExamples(proteins, limit=None, limitTerms=None):
     print "Building examples"
     y = []
     X = []
@@ -51,12 +55,18 @@ def buildExamples(proteins, limit=None):
             features[feature] = 1
         X.append(features)
         # Build labels
-        labels = sorted(protein["terms"].keys())
+        labels = protein["terms"].keys()
+        if limitTerms:
+            labels = [x for x in labels if x in limitTerms]
+        labels = sorted(labels)
         y.append(labels)
         #print features
     y = mlb.fit_transform(y)
     X = dv.fit_transform(X)
     return y, X
+
+def getTopTerms(counts, num=1000):
+    return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
 def classify(y, X, verbose=3, n_jobs = 1, scoring = "f1_micro"):
     clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose, n_jobs=n_jobs, scoring=scoring)
@@ -66,9 +76,12 @@ def classify(y, X, verbose=3, n_jobs = 1, scoring = "f1_micro"):
 def run(dataPath):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
+    counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
+    print "Proteins:", len(proteins)
+    topTerms = getTopTerms(counts, 100)
+    print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
-    y, X = buildExamples(proteins, 100)
+    y, X = buildExamples(proteins, 10000, set([x[0] for x in topTerms]))
     #print y
     #print X
     classify(y, X)

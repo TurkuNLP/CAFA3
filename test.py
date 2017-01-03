@@ -58,8 +58,8 @@ def buildExamples(proteins, limit=None):
     X = dv.fit_transform(X)
     return y, X
 
-def classify(y, X, verbose=3):
-    clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose)
+def classify(y, X, verbose=3, n_jobs = 1, scoring = "f1_micro"):
+    clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose, n_jobs=n_jobs, scoring=scoring)
     clf.fit(X, y)
     print "Best params", (clf.best_params_, clf.best_score_)
 
@@ -69,8 +69,8 @@ def run(dataPath):
     loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
     print proteins["14310_ARATH"]
     y, X = buildExamples(proteins, 100)
-    print y
-    print X
+    #print y
+    #print X
     classify(y, X)
 
 if __name__=="__main__":       

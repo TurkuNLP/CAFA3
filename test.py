@@ -9,10 +9,13 @@ from sklearn.ensemble.forest import ExtraTreesClassifier
 import operator
 
 def loadUniprotSimilarity(inPath, proteins):
+    for key in proteins:
+        proteins[key]["similar"] = {"sub":set(), "fam":set()}
     print "Loading uniprot similar.txt"
     with open(inPath, "rt") as f:
         section = None
         group = None
+        subgroup = ""
         #lineCount = 0
         for line in f:
             if line.startswith("I. Domains, repeats and zinc fingers"):
@@ -21,20 +24,25 @@ def loadUniprotSimilarity(inPath, proteins):
                 section = "fam"
             elif section == None: # Not yet in the actual data
                 continue
-            elif line.strip() == "": # empty line ends block
-                group = None
+            elif line.startswith("----------"): # end of file
+                break
+            elif line.strip() == "":
+                continue
+            #elif line.strip() == "": # empty line ends block
+            #    group = None
             elif line[0].strip() != "": # a new group (family or domain)
                 group = line.strip().replace(" ", "-").replace(",",";")
+                subgroup = ""
+            elif line.startswith("  ") and line[2] != " ":
+                subgroup = "<" + line.strip().replace(" ", "-").replace(",",";") + ">"
             elif line.startswith("     "):
-                assert group != None
+                assert group != None, line
                 items = [x.strip() for x in line.strip().split(",")]
                 items = [x for x in items if x != ""]
                 protIds = [x.split()[0] for x in items]
                 for protId in protIds:
                     if protId in proteins:
-                        if "similar" not in proteins[protId]:
-                            proteins[protId]["similar"] = {"sub":set(), "fam":set()}
-                        proteins[protId]["similar"][section].add(group)
+                        proteins[protId]["similar"][section].add(group + subgroup)
 
 def loadTerms(inPath, proteins):
     print "Loading terms from", inPath
@@ -72,18 +80,22 @@ def buildExamples(proteins, limit=None, limitTerms=None):
     protIds = sorted(proteins.keys())
     if limit:
         protIds = protIds[0:limit]
+    counts = {"instances":0, "unique":0}
     for protId in protIds:
         #print "Processing", protId
         protein = proteins[protId]
         # Build features
-        features = {}
+        features = {"dummy":1}
         if False:
             seq = protein["seq"]
             for i in range(len(seq)-3):
                 feature = seq[i:i+3]
                 features[feature] = 1
         if True:
-            for simFeature in protein["similar"]
+            for group in protein["similar"]["sub"]:
+                features["sub_" + group] = 1
+            for group in protein["similar"]["fam"]:
+                features["fam_" + group] = 1
         X.append(features)
         # Build labels
         labels = protein["terms"].keys()
@@ -100,7 +112,8 @@ def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
 def classify(y, X, verbose=3, n_jobs = 1, scoring = "f1_micro"):
-    clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose, n_jobs=n_jobs, scoring=scoring)
+    args = {"n_estimators":[10]} #{"n_estimators":[1,2,10,50,100]}
+    clf = GridSearchCV(ExtraTreesClassifier(), args, verbose=verbose, n_jobs=n_jobs, scoring=scoring)
     clf.fit(X, y)
     print "Best params", (clf.best_params_, clf.best_score_)
 
@@ -113,7 +126,7 @@ def run(dataPath):
     topTerms = getTopTerms(counts, 100)
     print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
-    y, X = buildExamples(proteins, 10000, set([x[0] for x in topTerms]))
+    y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X
     classify(y, X)

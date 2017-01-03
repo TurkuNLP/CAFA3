@@ -8,6 +8,34 @@ from sklearn.grid_search import GridSearchCV
 from sklearn.ensemble.forest import ExtraTreesClassifier
 import operator
 
+def loadUniprotSimilarity(inPath, proteins):
+    print "Loading uniprot similar.txt"
+    with open(inPath, "rt") as f:
+        section = None
+        group = None
+        #lineCount = 0
+        for line in f:
+            if line.startswith("I. Domains, repeats and zinc fingers"):
+                section = "sub"
+            elif line.startswith("II. Families"):
+                section = "fam"
+            elif section == None: # Not yet in the actual data
+                continue
+            elif line.strip() == "": # empty line ends block
+                group = None
+            elif line[0].strip() != "": # a new group (family or domain)
+                group = line.strip().replace(" ", "-").replace(",",";")
+            elif line.startswith("     "):
+                assert group != None
+                items = [x.strip() for x in line.strip().split(",")]
+                items = [x for x in items if x != ""]
+                protIds = [x.split()[0] for x in items]
+                for protId in protIds:
+                    if protId in proteins:
+                        if "similar" not in proteins[protId]:
+                            proteins[protId]["similar"] = {"sub":set(), "fam":set()}
+                        proteins[protId]["similar"][section].add(group)
+
 def loadTerms(inPath, proteins):
     print "Loading terms from", inPath
     counts = defaultdict(int)
@@ -49,10 +77,13 @@ def buildExamples(proteins, limit=None, limitTerms=None):
         protein = proteins[protId]
         # Build features
         features = {}
-        seq = protein["seq"]
-        for i in range(len(seq)-3):
-            feature = seq[i:i+3]
-            features[feature] = 1
+        if False:
+            seq = protein["seq"]
+            for i in range(len(seq)-3):
+                feature = seq[i:i+3]
+                features[feature] = 1
+        if True:
+            for simFeature in protein["similar"]
         X.append(features)
         # Build labels
         labels = protein["terms"].keys()
@@ -77,6 +108,7 @@ def run(dataPath):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
+    loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     print "Proteins:", len(proteins)
     topTerms = getTopTerms(counts, 100)
     print "Most common terms:", topTerms

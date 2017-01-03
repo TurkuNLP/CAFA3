@@ -49,13 +49,16 @@ def buildExamples(proteins, limit=None):
         for i in range(len(seq)-3):
             feature = seq[i:i+3]
             features[feature] = 1
-        #print features
+        X.append(features)
         # Build labels
-        y.append(mlb.fit_transform(sorted(protein["terms"].keys())))
-        X.append(dv.fit_transform(features))
+        labels = sorted(protein["terms"].keys())
+        y.append(labels)
+        #print features
+    y = mlb.fit_transform(y)
+    X = dv.fit_transform(X)
     return y, X
 
-def classify(y, X, verbose=2):
+def classify(y, X, verbose=3):
     clf = GridSearchCV(ExtraTreesClassifier(), {"n_estimators":[1,2,10,50,100]}, verbose=verbose)
     clf.fit(X, y)
     print "Best params", (clf.best_params_, clf.best_score_)

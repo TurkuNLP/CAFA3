@@ -4,11 +4,13 @@ from collections import defaultdict
 import csv
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import MultiLabelBinarizer
-from sklearn.grid_search import GridSearchCV
+from sklearn.grid_search import GridSearchCV, ParameterGrid
 from sklearn.ensemble.forest import ExtraTreesClassifier, RandomForestClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, f1_score
+
 import operator
 import time
+from sklearn.cross_validation import train_test_split
 
 def loadUniprotSimilarity(inPath, proteins):
     for key in proteins:
@@ -116,10 +118,19 @@ def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
 def classify(y, X, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
-    args = {"n_estimators":[10], "n_jobs":[n_jobs]} #{"n_estimators":[1,2,10,50,100]}
-    clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
-    clf.fit(X, y)
-    print "Best params", (clf.best_params_, clf.best_score_)
+    grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs]}) #{"n_estimators":[1,2,10,50,100]}
+    XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
+    XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
+    for args in grid:
+        print "Learning with args", args
+        cls = RandomForestClassifier(**args)
+        cls.fit(XTrain, yTrain)
+        predicted = cls.predict(XDevel)
+        score = f1_score(yDevel, predicted)
+        print score 
+    #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
+    #clf.fit(X, y)
+    #print "Best params", (clf.best_params_, clf.best_score_)
 
 def run(dataPath):
     proteins = defaultdict(lambda: dict())
@@ -127,7 +138,7 @@ def run(dataPath):
     counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     print "Proteins:", len(proteins)
-    topTerms = getTopTerms(counts, 1)
+    topTerms = getTopTerms(counts, 10)
     print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
     y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))

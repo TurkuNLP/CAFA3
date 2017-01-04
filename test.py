@@ -118,7 +118,7 @@ def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
 def classify(y, X, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
-    grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs]}) #{"n_estimators":[1,2,10,50,100]}
+    grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
     for args in grid:
@@ -126,7 +126,7 @@ def classify(y, X, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
         cls = RandomForestClassifier(**args)
         cls.fit(XTrain, yTrain)
         predicted = cls.predict(XDevel)
-        score = f1_score(yDevel, predicted)
+        score = f1_score(yDevel, predicted, average=None)
         print score 
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
     #clf.fit(X, y)
@@ -138,7 +138,7 @@ def run(dataPath):
     counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     print "Proteins:", len(proteins)
-    topTerms = getTopTerms(counts, 10)
+    topTerms = getTopTerms(counts, 1000)
     print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
     y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))

@@ -142,16 +142,22 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
     sets = examples["sets"]
     trainIndices = [i for i in range(len(sets)) if sets[i] == "train"]
     develIndices = [i for i in range(len(sets)) if sets[i] == "devel"]
+    trainFeatures = examples["features"][trainIndices]
+    develFeatures = examples["features"][develIndices]
+    trainLabels = examples["labels"][trainIndices]
+    develLabels = examples["labels"][develIndices]
+    print "Train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
     bestScore = None
     bestArgs = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     for args in grid:
         print "Learning with args", args
         cls = RandomForestClassifier(**args)
-        cls.fit(examples["features"][trainIndices], examples["labels"][trainIndices])
-        predicted = cls.predict(examples["features"][develIndices])
-        score = f1_score(examples["labels"][develIndices], predicted, average=None)
-        print score
+        cls.fit(trainFeatures, trainLabels)
+        predicted = cls.predict(develFeatures)
+        score = f1_score(develLabels, predicted, average="micro")
+        scores = f1_score(develLabels, predicted, average=None)
+        print score, scores
         if bestScore == None or score > bestScore:
             bestScore = score
             bestArgs = args
@@ -174,10 +180,10 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
 def run(dataPath, featureGroups, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_evidence.tsv.gz"), proteins)
+    counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     print "Proteins:", len(proteins)
-    topTerms = getTopTerms(counts, 1000)
+    topTerms = getTopTerms(counts, 100)
     print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)

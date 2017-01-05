@@ -56,7 +56,12 @@ def get_annotation_dict(annotation_data):
         ann_dict[prot_id].append(annotation)
     return ann_dict
 
-def generate_data(seq_path, ann_path, ann_ids):
+def read_split_ids(split_path):
+    split_file = gzip.open(split_path)
+    split_data = set([s.strip() for s in split_file])
+    return split_data
+
+def generate_data(split_path, seq_path, ann_path, ann_ids):
     """
     Generates NN compatible data.
     """
@@ -67,6 +72,8 @@ def generate_data(seq_path, ann_path, ann_ids):
     ann_data = ann_file.readlines()
     ann_dict = get_annotation_dict(ann_data)
     
+    split_ids = read_split_ids(split_path)
+    
     x = []
     y = []
     
@@ -74,6 +81,8 @@ def generate_data(seq_path, ann_path, ann_ids):
         if i % 10000 == 0:
             print i
         prot_id = prot_id.strip().strip('>')
+        if prot_id not in split_ids:
+            continue
         seq = seq.strip()
         seq_id_list = [char_dict[s] for s in seq]
         annotations = ann_dict[prot_id]
@@ -91,8 +100,10 @@ def generate_data(seq_path, ann_path, ann_ids):
 
 def train():
     print 'Generating training data'
-    ann_ids, reverse_ann_ids = get_annotation_ids('./data/Swissprot_propagated.tsv.gz', top=5000)
-    train_data = generate_data('./data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
+    ann_ids, reverse_ann_ids = get_annotation_ids('./data/Swissprot_propagated.tsv.gz', top=1000)
+    train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
+    devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
+    test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
     
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
@@ -117,7 +128,7 @@ def train():
     print model.summary()
     
     print 'Training model'
-    model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_split=0.2)
+    model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_data=[devel_data, devel_data])
             
     import pdb; pdb.set_trace()
     

@@ -95,13 +95,14 @@ def splitProteins(proteins):
 
 def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
-    examples = {"labels":[], "features":[], "ids":[], "sets":[]}
+    examples = {"labels":[], "features":[], "ids":[], "sets":[], "label_names":[], "label_size":{}}
     mlb = MultiLabelBinarizer()
     dv = DictVectorizer(sparse=True)
+    protIds = sorted(proteins.keys())
     if limit:
-        proteins = proteins[0:limit]
+        protIds = protIds[0:limit]
     counts = {"instances":0, "unique":0}
-    for protId in sorted(proteins.keys()):
+    for protId in protIds:
         protein = proteins[protId]
         # Build features
         features = {"dummy":1}
@@ -122,6 +123,10 @@ def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
         labels = sorted(labels)
         if len(labels) == 0:
             labels = ["no_annotations"]
+        for label in labels:
+            if label not in examples["label_size"]:
+                examples["label_size"][label] = 0
+            examples["label_size"][label] += 1
         examples["labels"].append(labels)
         examples["features"].append(features)
         examples["ids"].append(protId)
@@ -129,11 +134,28 @@ def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
         #print features
     examples["features"] = dv.fit_transform(examples["features"])
     examples["labels"] = mlb.fit_transform(examples["labels"])
+    examples["label_names"] = mlb.classes_
     return examples
     #return mlb.fit_transform(examples["labels"]), dv.fit_transform(examples["features"])
 
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
+
+def getResults(examples, scores):
+    assert len(scores) == len(examples["label_names"])
+    results = []
+    for i in range(len(examples["label_names"])):
+        name = examples["label_names"][i]
+        results.append((scores[i], name, examples["label_size"][name]))
+    return results
+
+def printResults(results, maxNumber=None):
+    count = 0
+    for result in sorted(results, reverse=True):
+        print result
+        count += 1
+        if count > maxNumber:
+            break
 
 def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
@@ -157,7 +179,8 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
         predicted = cls.predict(develFeatures)
         score = f1_score(develLabels, predicted, average="micro")
         scores = f1_score(develLabels, predicted, average=None)
-        print score, scores
+        print "Average =", score
+        printResults(getResults(examples, scores))
         if bestScore == None or score > bestScore:
             bestScore = score
             bestArgs = args
@@ -177,7 +200,7 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, featureGroups, useTestSet=False):
+def run(dataPath, featureGroups, limit=None, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
@@ -188,7 +211,7 @@ def run(dataPath, featureGroups, useTestSet=False):
     print proteins["14310_ARATH"]
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
     #divided = splitProteins(proteins)
-    examples = buildExamples(proteins, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+    examples = buildExamples(proteins, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
     optimize(examples)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
@@ -202,9 +225,10 @@ if __name__=="__main__":
     optparser = OptionParser(description="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
     optparser.add_option("-f", "--features", default="similar", help="")
+    optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
-    run(options.dataPath, options.features.split(","), options.testSet)
+    run(options.dataPath, options.features.split(","), options.limit, options.testSet)

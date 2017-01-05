@@ -95,13 +95,14 @@ def splitProteins(proteins):
 
 def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
-    examples = {"labels":[], "features":[]}
+    examples = {"labels":[], "features":[], "ids":[], "sets":[]}
     mlb = MultiLabelBinarizer()
     dv = DictVectorizer(sparse=True)
     if limit:
         proteins = proteins[0:limit]
     counts = {"instances":0, "unique":0}
-    for protein in proteins:
+    for protId in sorted(proteins.keys()):
+        protein = proteins[protId]
         # Build features
         features = {"dummy":1}
         if featureGroups == None or "seq" in featureGroups:
@@ -123,25 +124,33 @@ def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
             labels = ["no_annotations"]
         examples["labels"].append(labels)
         examples["features"].append(features)
+        examples["ids"].append(protId)
+        examples["sets"].append(protein["set"])
         #print features
-    return mlb.fit_transform(examples["labels"]), dv.fit_transform(examples["features"])
+    examples["features"] = dv.fit_transform(examples["features"])
+    examples["labels"] = mlb.fit_transform(examples["labels"])
+    return examples
+    #return mlb.fit_transform(examples["labels"]), dv.fit_transform(examples["features"])
 
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
+def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
+    sets = examples["sets"]
+    trainIndices = [i for i in range(len(sets)) if sets[i] == "train"]
+    develIndices = [i for i in range(len(sets)) if sets[i] == "devel"]
     bestScore = None
     bestArgs = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     for args in grid:
         print "Learning with args", args
         cls = RandomForestClassifier(**args)
-        cls.fit(trainFeatures, trainLabels)
-        predicted = cls.predict(develFeatures)
-        score = f1_score(develLabels, predicted, average=None)
+        cls.fit(examples["features"][trainIndices], examples["labels"][trainIndices])
+        predicted = cls.predict(examples["features"][develIndices])
+        score = f1_score(examples["labels"][develIndices], predicted, average=None)
         print score
         if bestScore == None or score > bestScore:
             bestScore = score
@@ -151,16 +160,16 @@ def optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, 
     #clf.fit(X, y)
     #print "Best params", (clf.best_params_, clf.best_score_)
 
-def learn(train, devel, test, limit=None, limitTerms=None, featureGroups=None):
-    print time.strftime('%X %x %Z')
-    print "Building devel examples"
-    develLabels, develFeatures = buildExamples(devel, limit, limitTerms, featureGroups)
-    print "Building train examples"
-    trainLabels, trainFeatures = buildExamples(train, limit, limitTerms, featureGroups)
-    if test != None:
-        print "Building train examples"
-        testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
-    optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
+# def learn(train, devel, test, limit=None, limitTerms=None, featureGroups=None):
+#     print time.strftime('%X %x %Z')
+#     print "Building devel examples"
+#     develLabels, develFeatures = buildExamples(devel, limit, limitTerms, featureGroups)
+#     print "Building train examples"
+#     trainLabels, trainFeatures = buildExamples(train, limit, limitTerms, featureGroups)
+#     if test != None:
+#         print "Building train examples"
+#         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
+#     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
 def run(dataPath, featureGroups, useTestSet=False):
     proteins = defaultdict(lambda: dict())
@@ -172,9 +181,9 @@ def run(dataPath, featureGroups, useTestSet=False):
     print "Most common terms:", topTerms
     print proteins["14310_ARATH"]
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
-    divided = splitProteins(proteins)
-    learn(divided["train"], divided["devel"], divided["test"] if useTestSet else None, 
-          limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+    #divided = splitProteins(proteins)
+    examples = buildExamples(proteins, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+    optimize(examples)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X

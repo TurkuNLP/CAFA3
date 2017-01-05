@@ -226,14 +226,14 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, output=None, featureGroups=None, limit=None, useTestSet=False):
+def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     counts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     print "Proteins:", len(proteins)
-    topTerms = getTopTerms(counts, 100)
+    topTerms = getTopTerms(counts, numTerms)
     print "Using", len(topTerms), "most common GO terms"
     #print "Most common terms:", topTerms
     #print proteins["14310_ARATH"]
@@ -256,10 +256,11 @@ if __name__=="__main__":
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
     optparser.add_option("-f", "--features", default="similar", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
+    optparser.add_option("-t", "--terms", default=100, type=int, help="")
     optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
-    run(options.dataPath, featureGroups=options.features.split(","), limit=options.limit, useTestSet=options.testSet, output=options.output)
+    run(options.dataPath, featureGroups=options.features.split(","), limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, output=options.output)

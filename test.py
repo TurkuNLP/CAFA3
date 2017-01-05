@@ -146,16 +146,24 @@ def getResults(examples, scores):
     results = []
     for i in range(len(examples["label_names"])):
         name = examples["label_names"][i]
-        results.append((scores[i], name, examples["label_size"][name]))
+        results.append({"score":scores[i], "name":name, "label_size":examples["label_size"][name]})
     return results
 
 def printResults(results, maxNumber=None):
     count = 0
+    results = [(x["score"], x["name"], x["label_size"]) for x in results]
     for result in sorted(results, reverse=True):
         print result
         count += 1
         if count > maxNumber:
             break
+
+def saveResults(results, outPath):
+    print "Writing results to", outPath
+    with open(outPath, "wt") as f:
+        dw = csv.DictWriter(f, ["score", "name", "label_size"], delimiter='\t')
+        dw.writeheader()
+        dw.writerows(sorted(results, key=lambda x: x["score"], reverse=True))
 
 def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
@@ -169,8 +177,7 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
     trainLabels = examples["labels"][trainIndices]
     develLabels = examples["labels"][develIndices]
     print "Train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
-    bestScore = None
-    bestArgs = None
+    best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     for args in grid:
         print "Learning with args", args
@@ -180,11 +187,12 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
         score = f1_score(develLabels, predicted, average="micro")
         scores = f1_score(develLabels, predicted, average=None)
         print "Average =", score
-        printResults(getResults(examples, scores))
-        if bestScore == None or score > bestScore:
-            bestScore = score
-            bestArgs = args
+        results = getResults(examples, scores)
+        printResults(results, 20)
+        if best == None or score > best["score"]:
+            best = {"score":score, "results":results, "args":args}
         print time.strftime('%X %x %Z')
+    return best
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
     #clf.fit(X, y)
     #print "Best params", (clf.best_params_, clf.best_score_)
@@ -200,7 +208,7 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, featureGroups, limit=None, useTestSet=False):
+def run(dataPath, output=None, featureGroups=None, limit=None, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
@@ -212,7 +220,9 @@ def run(dataPath, featureGroups, limit=None, useTestSet=False):
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
     #divided = splitProteins(proteins)
     examples = buildExamples(proteins, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-    optimize(examples)
+    best = optimize(examples)
+    if output != None:
+        saveResults(best["results"], output)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X
@@ -226,9 +236,10 @@ if __name__=="__main__":
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
     optparser.add_option("-f", "--features", default="similar", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
+    optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
-    run(options.dataPath, options.features.split(","), options.limit, options.testSet)
+    run(options.dataPath, featureGroups=options.features.split(","), limit=options.limit, useTestSet=options.testSet, output=options.output)

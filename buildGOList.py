@@ -3,6 +3,7 @@ import csv
 def convert(inPath, outPath):
     assert inPath != None and outPath != None
     assert inPath != outPath
+    print "Reading GO obo ontology from", inPath
     with open(inPath, "rt") as f:
         terms = []
         term = None
@@ -14,12 +15,13 @@ def convert(inPath, outPath):
                     terms.append(term)
             elif term != None and ":" in line:
                 line = line.strip()
-                tag, content = line.split(":", 1)
+                tag, content = [x.strip() for x in line.split(":", 1)]
                 term[tag] = content
                 if tag == "namespace":
                     term["ns"] = "".join([x[0] for x in content.split("_")])
+    print "Writing term names to", outPath
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "ns", "name"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "ns", "name"], delimiter='\t', extrasaction='ignore')
         dw.writeheader()
         dw.writerows(terms)   
 

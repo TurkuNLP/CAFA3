@@ -52,6 +52,11 @@ def stats(ann_path='./data/Swissprot_evidence.tsv.gz'):
     print 'Unique amino acids: %s' % len(characters)
     print 'Sequence length, mean: %s, median: %s, min: %s, max: %s' % (numpy.mean(seq_lengths), numpy.median(seq_lengths), min(seq_lengths), max(seq_lengths))
     print 'Acids: %s' % ''.join(sorted(characters))
+    
+    print 'Sequences of length N or smaller cover:'
+    for i in [10, 100, 500, 1000, 2500, 5000, 10000]:
+        seq_count = len([1 for s in seq_lengths if s <= i])
+        print '%s\t%s' % (i, float(seq_count)/len(seq_lengths))
 
 def pairwise(iterable):
     "s -> (s0, s1), (s2, s3), (s4, s5), ..."

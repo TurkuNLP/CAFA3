@@ -1,4 +1,4 @@
-from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, Flatten, merge
+from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, Flatten, merge, Masking
 from keras.models import Model
 from keras.preprocessing import sequence
 from keras.utils import np_utils
@@ -12,18 +12,18 @@ from collections import defaultdict
 
 from stats import pairwise
 
-timesteps = 5000 # maximum length of a sequence, the real max is 35K
+timesteps = 2500 # maximum length of a sequence, the real max is 35K. 2.5K covers 99% of the sequences, 5K 99.9%
 latent_dim = 50 # Amino acid embedding size
 char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 
 # TODO: Add fixed train/devel/test sets
-# TODO: Add F-score evaluation and early stopping
+# TODO: Add early stopping
 # TODO: Save model + other needed files after training
-# TODO: Try LSTM
 # TODO: Try some fancy pooling approach
 # TODO: Add normal features
+# TODO: Add naive blast baseline for comparison
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -99,16 +99,21 @@ def train():
     embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
     
     convs = []
-    for i in [3, 9, 27, 81]:
+    for i in [3, 9, 27]:
         encoded = Convolution1D(50, i, border_mode='valid')(embedding)
         encoded = GlobalMaxPooling1D()(encoded)
         convs.append(encoded)
+
+    #mask = Masking()(embedding)
+    #lstm = LSTM(100)(mask)
+    #convs.append(lstm)
+    
     encoded = merge(convs, mode='concat')
     
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
     
     model = Model(inputs, predictions)
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
     print model.summary()
     
     print 'Training model'

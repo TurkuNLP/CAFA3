@@ -11,6 +11,7 @@ from sklearn.metrics import classification_report, f1_score
 import operator
 import time
 from sklearn.cross_validation import train_test_split
+from sklearn.metrics.ranking import roc_auc_score
 
 def loadUniprotSimilarity(inPath, proteins):
     for key in proteins:
@@ -48,8 +49,8 @@ def loadUniprotSimilarity(inPath, proteins):
                     if protId in proteins:
                         proteins[protId]["similar"][section].add(group + subgroup)
 
-def loadTerms(inPath, proteins):
-    print "Loading terms from", inPath
+def loadAnnotations(inPath, proteins):
+    print "Loading annotations from", inPath
     counts = defaultdict(int)
     with gzip.open(inPath, "rt") as f:
         tsv = csv.reader(f, delimiter='\t')
@@ -61,6 +62,17 @@ def loadTerms(inPath, proteins):
             protein["terms"][goTerm] = evCode
             counts[goTerm] += 1
     return counts
+
+def loadGOTerms(inPath):
+    print "Loading GO terms from", inPath
+    terms = {}
+    with open(inPath, "rt") as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        for row in reader:
+            #print row
+            assert row["id"] not in terms
+            terms[row["id"]] = row
+    return terms
 
 def loadSequences(inPath, proteins):
     print "Loading sequences from", inPath
@@ -141,17 +153,23 @@ def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def getResults(examples, scores):
+def getResults(examples, scores, terms=None):
     assert len(scores) == len(examples["label_names"])
     results = []
     for i in range(len(examples["label_names"])):
         label = examples["label_names"][i]
-        results.append({"score":scores[i], "id":label, "label_size":examples["label_size"][label]})
+        result = {"score":scores[i], "id":label, "label_size":examples["label_size"][label]}
+        if terms != None and label in terms:
+            term = terms[label]
+            result["ns"] = term["ns"]
+            result["name"] = term["name"]
+        results.append(result)
     return results
 
 def printResults(results, maxNumber=None):
     count = 0
-    results = [(x["score"], x["id"], x["label_size"]) for x in results]
+    keys = ["score", "id", "label_size", "ns", "name"]
+    results = [[x[key] for key in keys] for x in results]
     for result in sorted(results, reverse=True):
         print result
         count += 1
@@ -161,11 +179,11 @@ def printResults(results, maxNumber=None):
 def saveResults(results, outPath):
     print "Writing results to", outPath
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["score", "id", "label_size"], delimiter='\t')
+        dw = csv.DictWriter(f, ["score", "id", "label_size", "ns", "name"], delimiter='\t')
         dw.writeheader()
         dw.writerows(sorted(results, key=lambda x: x["score"], reverse=True))
 
-def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
+def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, terms=None):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -184,10 +202,10 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
         cls = RandomForestClassifier(**args)
         cls.fit(trainFeatures, trainLabels)
         predicted = cls.predict(develFeatures)
-        score = f1_score(develLabels, predicted, average="micro")
-        scores = f1_score(develLabels, predicted, average=None)
+        score = roc_auc_score(develLabels, predicted, average="micro")
+        scores = roc_auc_score(develLabels, predicted, average=None)
         print "Average =", score
-        results = getResults(examples, scores)
+        results = getResults(examples, scores, terms)
         printResults(results, 20)
         if best == None or score > best["score"]:
             best = {"score":score, "results":results, "args":args}
@@ -211,16 +229,18 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1):
 def run(dataPath, output=None, featureGroups=None, limit=None, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    counts = loadTerms(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+    counts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
+    terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     print "Proteins:", len(proteins)
     topTerms = getTopTerms(counts, 100)
-    print "Most common terms:", topTerms
-    print proteins["14310_ARATH"]
+    print "Using", len(topTerms), "most common GO terms"
+    #print "Most common terms:", topTerms
+    #print proteins["14310_ARATH"]
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
     #divided = splitProteins(proteins)
     examples = buildExamples(proteins, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-    best = optimize(examples)
+    best = optimize(examples, terms=terms)
     if output != None:
         saveResults(best["results"], output)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))

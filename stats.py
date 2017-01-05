@@ -29,10 +29,11 @@ def stats(ann_path='./data/Swissprot_evidence.tsv.gz'):
     print 'Unique proteins: %s' % len(proteins)
     print 'Annotations per protein, mean: %s, median: %s, max: %s' % (numpy.mean(proteins.values()), numpy.median(proteins.values()), max(proteins.values()))
     
-    print 'Top N annotations cover:'
+    print 'Top N annotations cover (Nth only):'
     for i in [1, 100, 1000, 2500, 5000, 10000, 20000]:
-        top = sum([a for a in sorted(annotations.values(), reverse=True)][:i])
-        print '%s: %s' % (i, float(top)/sum(annotations.values()))
+        top = sum(sorted(annotations.values(), reverse=True)[:i])
+        nth = sorted(annotations.values(), reverse=True)[i-1]
+        print '%s: %s, (%s)' % (i, float(top)/sum(annotations.values()), nth)
     
     print 'Evidence counts:'
     for ev, count in sorted(evidences.items()):

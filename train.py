@@ -2,7 +2,9 @@ from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, 
 from keras.models import Model
 from keras.preprocessing import sequence
 from keras.utils import np_utils
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 
+import os
 import gzip
 import numpy as np
 np.random.seed(1337)
@@ -18,12 +20,12 @@ char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 
-# TODO: Add fixed train/devel/test sets
-# TODO: Add early stopping
-# TODO: Save model + other needed files after training
+
+model_dir = './model/'
+# TODO: Save model + other needed files after training: model, go_id mapping
 # TODO: Try some fancy pooling approach
-# TODO: Add normal features
-# TODO: Add naive blast baseline for comparison
+# TODO: Add normal features (needs data from Suwisa)
+# TODO: Add naive blast baseline for comparison (needs data from Suwisa)
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -128,7 +130,9 @@ def train():
     print model.summary()
     
     print 'Training model'
-    model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_data=[devel_data, devel_data])
+    es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1)
+    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), save_best_only=True,verbose=1)
+    model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
             
     import pdb; pdb.set_trace()
     

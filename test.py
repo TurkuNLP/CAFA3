@@ -145,13 +145,13 @@ def getResults(examples, scores):
     assert len(scores) == len(examples["label_names"])
     results = []
     for i in range(len(examples["label_names"])):
-        name = examples["label_names"][i]
-        results.append({"score":scores[i], "name":name, "label_size":examples["label_size"][name]})
+        label = examples["label_names"][i]
+        results.append({"score":scores[i], "id":label, "label_size":examples["label_size"][label]})
     return results
 
 def printResults(results, maxNumber=None):
     count = 0
-    results = [(x["score"], x["name"], x["label_size"]) for x in results]
+    results = [(x["score"], x["id"], x["label_size"]) for x in results]
     for result in sorted(results, reverse=True):
         print result
         count += 1
@@ -161,7 +161,7 @@ def printResults(results, maxNumber=None):
 def saveResults(results, outPath):
     print "Writing results to", outPath
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["score", "name", "label_size"], delimiter='\t')
+        dw = csv.DictWriter(f, ["score", "id", "label_size"], delimiter='\t')
         dw.writeheader()
         dw.writerows(sorted(results, key=lambda x: x["score"], reverse=True))
 

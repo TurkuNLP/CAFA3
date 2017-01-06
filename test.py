@@ -159,6 +159,8 @@ def getResults(examples, scores, terms=None):
     for i in range(len(examples["label_names"])):
         label = examples["label_names"][i]
         result = {"score":scores[i], "id":label, "label_size":examples["label_size"][label]}
+        result["ns"] = None
+        result["name"] = None
         if terms != None and label in terms:
             term = terms[label]
             result["ns"] = term["ns"]
@@ -183,7 +185,7 @@ def saveResults(results, outPath):
         dw.writeheader()
         dw.writerows(sorted(results, key=lambda x: x["score"], reverse=True))
 
-def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, terms=None):
+def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, terms=None):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -229,11 +231,12 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
 def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, useTestSet=False):
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    counts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+    termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
     loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     print "Proteins:", len(proteins)
-    topTerms = getTopTerms(counts, numTerms)
+    print "Unique terms:", len(termCounts)
+    topTerms = getTopTerms(termCounts, numTerms)
     print "Using", len(topTerms), "most common GO terms"
     #print "Most common terms:", topTerms
     #print proteins["14310_ARATH"]

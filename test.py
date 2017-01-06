@@ -7,47 +7,12 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.grid_search import GridSearchCV, ParameterGrid
 from sklearn.ensemble.forest import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.metrics import classification_report, f1_score
+from featureBuilders import *
 
 import operator
 import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
-
-def loadUniprotSimilarity(inPath, proteins):
-    for key in proteins:
-        proteins[key]["similar"] = {"sub":set(), "fam":set()}
-    print "Loading uniprot similar.txt"
-    with open(inPath, "rt") as f:
-        section = None
-        group = None
-        subgroup = ""
-        #lineCount = 0
-        for line in f:
-            if line.startswith("I. Domains, repeats and zinc fingers"):
-                section = "sub"
-            elif line.startswith("II. Families"):
-                section = "fam"
-            elif section == None: # Not yet in the actual data
-                continue
-            elif line.startswith("----------"): # end of file
-                break
-            elif line.strip() == "":
-                continue
-            #elif line.strip() == "": # empty line ends block
-            #    group = None
-            elif line[0].strip() != "": # a new group (family or domain)
-                group = line.strip().replace(" ", "-").replace(",",";")
-                subgroup = ""
-            elif line.startswith("  ") and line[2] != " ":
-                subgroup = "<" + line.strip().replace(" ", "-").replace(",",";") + ">"
-            elif line.startswith("     "):
-                assert group != None, line
-                items = [x.strip() for x in line.strip().split(",")]
-                items = [x for x in items if x != ""]
-                protIds = [x.split()[0] for x in items]
-                for protId in protIds:
-                    if protId in proteins:
-                        proteins[protId]["similar"][section].add(group + subgroup)
 
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
@@ -98,36 +63,23 @@ def loadSplit(inPath, proteins):
                 assert protId in proteins
                 proteins[protId]["set"] = dataset
 
-def splitProteins(proteins):
-    datasets = {"devel":[], "train":[], "test":[]}
-    for protId in sorted(proteins.keys()):
-        datasets[proteins[protId]["set"]].append(proteins[protId])
-    print "Divided sets", [(x, len(datasets[x])) for x in sorted(datasets.keys())]
-    return datasets
+# def splitProteins(proteins):
+#     datasets = {"devel":[], "train":[], "test":[]}
+#     for protId in sorted(proteins.keys()):
+#         datasets[proteins[protId]["set"]].append(proteins[protId])
+#     print "Divided sets", [(x, len(datasets[x])) for x in sorted(datasets.keys())]
+#     return datasets
 
-def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
+def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
-    examples = {"labels":[], "features":[], "ids":[], "sets":[], "label_names":[], "label_size":{}}
-    mlb = MultiLabelBinarizer()
-    dv = DictVectorizer(sparse=True)
+    examples = {"labels":[], "features":None, "ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     if limit:
         protIds = protIds[0:limit]
-    counts = {"instances":0, "unique":0}
-    for protId in protIds:
-        protein = proteins[protId]
-        # Build features
-        features = {"dummy":1}
-        if featureGroups == None or "seq" in featureGroups:
-            seq = protein["seq"]
-            for i in range(len(seq)-3):
-                feature = seq[i:i+3]
-                features[feature] = 1
-        if featureGroups == None or "similar" in featureGroups:
-            for group in protein["similar"]["sub"]:
-                features["sub_" + group] = 1
-            for group in protein["similar"]["fam"]:
-                features["fam_" + group] = 1
+    protObjs = [proteins[key] for key in protIds]
+    for protein in protObjs:
+        # Initialize features
+        protein["features"] = {"dummy":1}
         # Build labels
         labels = protein["terms"].keys()
         if limitTerms:
@@ -140,11 +92,16 @@ def buildExamples(proteins, limit=None, limitTerms=None, featureGroups=None):
                 examples["label_size"][label] = 0
             examples["label_size"][label] += 1
         examples["labels"].append(labels)
-        examples["features"].append(features)
-        examples["ids"].append(protId)
+        examples["ids"].append(protein["id"])
         examples["sets"].append(protein["set"])
-        #print features
-    examples["features"] = dv.fit_transform(examples["features"])
+    # Build features
+    if featureGroups == None or "seq" in featureGroups:
+        ufb = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
+        ufb.build(protObjs)
+    # Prepare the examples
+    mlb = MultiLabelBinarizer()
+    dv = DictVectorizer(sparse=True)
+    examples["features"] = dv.fit_transform([x["features"] for x in protObjs])
     examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
     return examples
@@ -232,7 +189,7 @@ def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, use
     proteins = defaultdict(lambda: dict())
     loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
-    loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
+    #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     print "Proteins:", len(proteins)
     print "Unique terms:", len(termCounts)

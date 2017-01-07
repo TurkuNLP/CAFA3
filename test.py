@@ -140,14 +140,14 @@ def getTopTerms(counts, num=1000):
 #         results.append(result)
 #     return results
 
-def metricsToString(result):
-    return "a/f|p/r = %.2f" % result["auc"] + "/" + "%.2f" % result["fscore"] + "|" + "%.2f" % result["precision"] + "/" + "%.2f" % result["recall"]
+def metricsToString(result, style="%.3f"):
+    return "a/f|p/r = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"]
 
-def getResultsString(results, maxNumber=None, skipNames=None):
+def getResultsString(results, maxNumber=None, skipIds=None):
     count = 0
     s = ""
     for result in sorted(results.values(), key=lambda x: x["auc"], reverse=True):
-        if skipNames != None and result["name"] in skipNames:
+        if skipIds != None and result["id"] in skipIds:
             continue
         s += metricsToString(result) + " " + str([result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]) + "\n"
         count += 1

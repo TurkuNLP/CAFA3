@@ -1,5 +1,7 @@
 import gzip
 import csv
+import re
+import os
 
 class FeatureBuilder:
     def __init__(self):
@@ -63,6 +65,7 @@ class UniprotFeatureBuilder(FeatureBuilder):
 class BlastFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
         self.inPath = inPath
+        self.filePattern = re.compile("target.[0-9]+.features_tsv.gz")
         self.columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
     
     def build(self, proteins):
@@ -70,15 +73,18 @@ class BlastFeatureBuilder(FeatureBuilder):
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
-        with gzip.open(self.inPath, "rt") as f:
-            reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
-            current = None
-            found = False
-            features = None
-            for row in reader:
-                if row["Uniprot_ID query"] != current:
-                    current = row["Uniprot_ID query"]
-                    found = current in protById
-                    features = protById[current]["features"] if found else None
-                if found:
-                    features["BLAST_" + row["Matched Uniprot_ID"]] = int(row["Hsp_score"])
+        for filename in sorted(os.listdir(self.inPath)):
+            if self.filePattern.match(filename) != None:
+                print "Reading", filename
+                with gzip.open(os.path.join(self.inPath, filename), "rt") as f:
+                    reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
+                    current = None
+                    found = False
+                    features = None
+                    for row in reader:
+                        if row["Uniprot_ID query"] != current:
+                            current = row["Uniprot_ID query"]
+                            found = current in protById
+                            features = protById[current]["features"] if found else None
+                        if found:
+                            features["BLAST_" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])

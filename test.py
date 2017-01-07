@@ -99,15 +99,17 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
         builder.build(protObjs)
     if featureGroups == None or "blast" in featureGroups:
-        builder = BlastFeatureBuilder(os.path.join(dataPath, "blastp_result_features", "target.all.features.tsv.gz"))
+        builder = BlastFeatureBuilder(os.path.join(dataPath, "blastp_result_features"))
         builder.build(protObjs)
     builder = None
     # Prepare the examples
     mlb = MultiLabelBinarizer()
     dv = DictVectorizer(sparse=True)
     examples["features"] = dv.fit_transform([x["features"] for x in protObjs])
+    examples["feature_names"] = dv.feature_names_
     examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
+    print "Built", len(examples["labels"]), "examples with", len(examples["feature_names"]), "unique features"
     return examples
     #return mlb.fit_transform(examples["labels"]), dv.fit_transform(examples["features"])
 
@@ -157,7 +159,7 @@ def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, te
     develFeatures = examples["features"][develIndices]
     trainLabels = examples["labels"][trainIndices]
     develLabels = examples["labels"][develIndices]
-    print "Train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
+    print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
     best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     for args in grid:
@@ -203,7 +205,7 @@ def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, use
     #print proteins["14310_ARATH"]
     loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
     #divided = splitProteins(proteins)
-    examples = buildExamples(proteins, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+    examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
     best = optimize(examples, terms=terms)
     if output != None:
         saveResults(best["results"], output)

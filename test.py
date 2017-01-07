@@ -164,6 +164,34 @@ def saveResults(results, outPath):
         results = [x for x in results.values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
 
+def importNamed(name):
+    asName = name.rsplit(".", 1)[-1]
+    imported = False
+    attempts = ["from sklearn." + name.rsplit(".", 1)[0] + " import " + asName,
+                "from " + name.rsplit(".", 1)[0] + " import " + asName,
+                "import " + name + " as " + asName]
+    for attempt in attempts:
+        try:
+            print "Importing '" + attempt + "', ",
+            exec attempt
+            imported = True
+            print "OK"
+            break;
+        except ImportError:
+            print "failed"
+    if not imported:
+        raise Exception("Could not import '" + name + "'")
+    return eval(asName)
+
+# def parseOptions(string):
+#     string = string.strip()
+#     if not string.startswith("{"):
+#         string = "{" + string
+#     if not string.endswith("}"):
+#         string = "}" + string
+#     print "Parsing options string:", string
+#     return eval(string)
+
 def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results = {}
     # Get the average result
@@ -191,8 +219,8 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
             result["name"] = term["name"]   
     return results
 
-def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, terms=None):
-    grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
+def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None):
+    #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
     sets = examples["sets"]
@@ -205,9 +233,11 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
     best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
-    for args in grid:
+    Cls = importNamed(classifier)
+    #grid = parseOptions(classifierArgs)
+    for args in ParameterGrid(classifierArgs):
         print "Learning with args", args
-        cls = RandomForestClassifier(**args)
+        cls = Cls(**args)
         cls.fit(trainFeatures, trainLabels)
         predicted = cls.predict(develFeatures)
         #score = roc_auc_score(develLabels, predicted, average="micro")
@@ -236,7 +266,7 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, limit=None, numTerms=100, useTestSet=False, clear=False):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -272,7 +302,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, limit=None, num
             examples = pickle.load(pickeFile)
     if actions == None or "classify" in actions:
         print "==========", "Training Classifier", "=========="
-        best = optimize(examples, terms=terms)
+        best = optimize(classifier, classifierArgs, examples, terms=terms)
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
@@ -290,14 +320,17 @@ if __name__=="__main__":
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("-t", "--terms", default=100, type=int, help="")
     optparser.add_option("-o", "--output", default=None, help="")
+    optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
+    optparser.add_option('-r','--args', help='', default="{'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
         options.actions = options.actions.split(",")
+    options.args = eval(options.args)
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
-        clear=options.clear)
+        clear=options.clear, classifier=options.classifier, classifierArgs=options.args)

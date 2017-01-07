@@ -105,6 +105,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["ids"].append(protein["id"])
         examples["sets"].append(protein["set"])
     # Build features
+    print "Building features, feature groups = ", featureGroups
     if featureGroups == None or "similar" in featureGroups:
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
         builder.build(protObjs)
@@ -281,7 +282,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     Stream.openLog(os.path.join(options.output, "log.txt"))
     if actions != None:
         for action in actions:
-            assert action in ("build", "classify") 
+            assert action in ("build", "classify")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
@@ -324,13 +325,13 @@ if __name__=="__main__":
     optparser = OptionParser(description="")
     optparser.add_option("-a", "--actions", default=None, help="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
-    optparser.add_option("-f", "--features", default="similar", help="")
+    optparser.add_option("-f", "--features", default="blast", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("-t", "--terms", default=100, type=int, help="")
     optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
-    optparser.add_option("-v", "--onevsrest", default=False, action="store_true", help="")
+    optparser.add_option("--onevsrest", default=False, action="store_true", help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()

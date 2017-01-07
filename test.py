@@ -6,14 +6,13 @@ from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.grid_search import GridSearchCV, ParameterGrid
 from sklearn.ensemble.forest import ExtraTreesClassifier, RandomForestClassifier
-from sklearn.metrics import classification_report, f1_score
+from sklearn.metrics import classification_report, f1_score, precision_score, recall_score
 from featureBuilders import *
 from utils import Stream
 import operator
 import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
-from sklearn.metrics.classification import precision_recall_fscore_support
 import shutil
 import pickle
 
@@ -142,21 +141,19 @@ def getTopTerms(counts, num=1000):
 #     return results
 
 def metricsToString(result):
-    s = "a/f|p/r|s = " 
-    s += "%.2f" % result["auc"] + "/" + "%.2f" % result["fscore"]
-    s += "|" + "%.2f" % result["precision"] + "/" + "%.2f" % result["recall"] + "|" + "%.2f" % result["support"]
-    return s
+    return "a/f|p/r = %.2f" % result["auc"] + "/" + "%.2f" % result["fscore"] + "|" + "%.2f" % result["precision"] + "/" + "%.2f" % result["recall"]
 
-def printResults(results, maxNumber=None):
+def getResultsString(results, maxNumber=None, skipNames=None):
     count = 0
-    results = sorted(results, key=lambda x: x["auc"], reverse=True)
-    for result in sorted(results, reverse=True):
-        if result == "average":
+    s = ""
+    for result in sorted(results.values(), key=lambda x: x["auc"], reverse=True):
+        if skipNames != None and result["name"] in skipNames:
             continue
-        print metricsToString(result), [result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]
+        s += metricsToString(result) + " " + str([result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]) + "\n"
         count += 1
         if count > maxNumber:
             break
+    return s
 
 def saveResults(results, outPath):
     print "Writing results to", outPath
@@ -170,17 +167,21 @@ def saveResults(results, outPath):
 def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results = {}
     # Get the average result
-    auc = roc_auc_score(labels, predicted, average="micro")
-    p, r, f, s = precision_recall_fscore_support(labels, predicted, average="micro")
-    results["average"] = {"id":"average", "ns":None, "name":None, "auc":auc, "precision":p, "recall":r, "fscore":f, "support":s}
+    results["average"] = {"id":"average", "ns":None, "name":None}
+    results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
+    results["average"]["fscore"] = f1_score(labels, predicted, average="micro")
+    results["average"]["precision"] = precision_score(labels, predicted, average="micro")
+    results["average"]["recall"] = recall_score(labels, predicted, average="micro")
     # Get results per label
     aucs = roc_auc_score(labels, predicted, average=None)
-    scores = precision_recall_fscore_support(labels, predicted, average=None, labels=label_names)
-    assert len(aucs) == len(scores) == len(label_names), (len(aucs), len(scores), len(label_names))
-    for auc, score, label_name in zip(aucs, scores, label_names):
+    fscores = f1_score(labels, predicted, average=None)
+    precisions = precision_score(labels, predicted, average=None)
+    recalls = recall_score(labels, predicted, average=None)
+    lengths = [len(x) for x in (aucs, fscores, precisions, recalls, label_names)]
+    assert len(set(lengths)) == 1, lengths
+    for auc, fscore, precision, recall, label_name in zip(aucs, fscores, precisions, recalls, label_names):
         assert label_name not in results
-        result = {"id":label_name, "ns":None, "name":None, "auc":auc, 
-                  "precision":score[0], "recall":score[1], "fscore":score[2], "support":score[3]}
+        result = {"id":label_name, "ns":None, "name":None, "auc":auc, "precision":precision, "recall":recall, "fscore":fscore}
         results[label_name] = result
         if label_size != None:
             result["label_size"] = label_size[label_name]
@@ -215,7 +216,7 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
         #results = getResults(examples, scores, terms)
         results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
         print "Average:", metricsToString(results["average"])
-        printResults(results, 20)
+        print getResultsString(results, 20, ["average"])
         if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
             best = {"results":results, "args":args}
         print time.strftime('%X %x %Z')

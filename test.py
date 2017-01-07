@@ -14,7 +14,7 @@ import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
 import shutil
-import pickle
+import cPickle as pickle
 
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
@@ -274,6 +274,9 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "Making output directory", outDir
         os.makedirs(outDir)
     Stream.openLog(os.path.join(options.output, "log.txt"))
+    if actions != None:
+        for action in actions:
+            assert action in ("build", "classify") 
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     

@@ -15,6 +15,7 @@ from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
 import shutil
 import cPickle as pickle
+from sklearn.multiclass import OneVsRestClassifier
 
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
@@ -219,7 +220,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
             result["name"] = term["name"]   
     return results
 
-def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None):
+def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -231,6 +232,8 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None):
     trainLabels = examples["labels"][trainIndices]
     develLabels = examples["labels"][develIndices]
     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
+    if useOneVsRest:
+        print "Using OneVsRestClassifier"
     best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     Cls = importNamed(classifier)
@@ -238,6 +241,8 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None):
     for args in ParameterGrid(classifierArgs):
         print "Learning with args", args
         cls = Cls(**args)
+        if useOneVsRest:
+            cls = OneVsRestClassifier(cls)
         cls.fit(trainFeatures, trainLabels)
         predicted = cls.predict(develFeatures)
         #score = roc_auc_score(develLabels, predicted, average="micro")
@@ -266,7 +271,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None):
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useOneVsRest=False, limit=None, numTerms=100, useTestSet=False, clear=False):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -305,7 +310,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             examples = pickle.load(pickeFile)
     if actions == None or "classify" in actions:
         print "==========", "Training Classifier", "=========="
-        best = optimize(classifier, classifierArgs, examples, terms=terms)
+        best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest)
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
@@ -325,6 +330,7 @@ if __name__=="__main__":
     optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
+    optparser.add_option("-v", "--onevsrest", default=False, action="store_true", help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
@@ -336,4 +342,4 @@ if __name__=="__main__":
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
-        clear=options.clear, classifier=options.classifier, classifierArgs=options.args)
+        clear=options.clear, classifier=options.classifier, classifierArgs=options.args, useOneVsRest=options.onevsrest)

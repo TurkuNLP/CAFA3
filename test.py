@@ -8,12 +8,14 @@ from sklearn.grid_search import GridSearchCV, ParameterGrid
 from sklearn.ensemble.forest import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.metrics import classification_report, f1_score
 from featureBuilders import *
-
+from utils import Stream
 import operator
 import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
 from sklearn.metrics.classification import precision_recall_fscore_support
+import shutil
+import pickle
 
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
@@ -64,6 +66,13 @@ def loadSplit(inPath, proteins):
                 assert protId in proteins
                 proteins[protId]["set"] = dataset
 
+def saveFeatureNames(names, outPath):
+    print "Saving feature names to", outPath
+    with open(outPath, "wt") as f:
+        f.write("index\tname\n")
+        for i in range(len(names)):
+            f.write(str(i) + "\t" + names[i] + "\n")
+        
 # def splitProteins(proteins):
 #     datasets = {"devel":[], "train":[], "test":[]}
 #     for protId in sorted(proteins.keys()):
@@ -166,7 +175,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results["average"] = {"id":"average", "ns":None, "name":None, "auc":auc, "precision":p, "recall":r, "fscore":f, "support":s}
     # Get results per label
     aucs = roc_auc_score(labels, predicted, average=None)
-    scores = precision_recall_fscore_support(labels, predicted, average=None)
+    scores = precision_recall_fscore_support(labels, predicted, average=None, labels=label_names)
     assert len(aucs) == len(scores) == len(label_names), (len(aucs), len(scores), len(label_names))
     for auc, score, label_name in zip(aucs, scores, label_names):
         assert label_name not in results
@@ -226,24 +235,42 @@ def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, t
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, useTestSet=False):
-    proteins = defaultdict(lambda: dict())
-    loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+def run(dataPath, outDir=None, actions=None, featureGroups=None, limit=None, numTerms=100, useTestSet=False, clear=False):
+    if clear and os.path.exists(outDir):
+        print "Removing output directory", outDir
+        shutil.rmtree(outDir)
+    if not os.path.exists(outDir):
+        print "Making output directory", outDir
+        os.makedirs(outDir)
+    Stream.openLog(os.path.join(options.output, "log.txt"))
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
-    print "Proteins:", len(proteins)
-    print "Unique terms:", len(termCounts)
-    topTerms = getTopTerms(termCounts, numTerms)
-    print "Using", len(topTerms), "most common GO terms"
-    #print "Most common terms:", topTerms
-    #print proteins["14310_ARATH"]
-    loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
-    #divided = splitProteins(proteins)
-    examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-    best = optimize(examples, terms=terms)
-    if output != None:
-        saveResults(best["results"], output)
+    
+    picklePath = os.path.join("outDir", "examples.pickle")
+    if actions == None or "build" in actions:
+        print "==========", "Building Examples", "=========="
+        proteins = defaultdict(lambda: dict())
+        loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+        termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+        print "Proteins:", len(proteins)
+        print "Unique terms:", len(termCounts)
+        topTerms = getTopTerms(termCounts, numTerms)
+        print "Using", len(topTerms), "most common GO terms"
+        #print "Most common terms:", topTerms
+        #print proteins["14310_ARATH"]
+        loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
+        #divided = splitProteins(proteins)
+        examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+        saveFeatureNames(examples)
+        print "Pickling examples to", picklePath
+        pickle.dump(examples, picklePath)
+    else:
+        print "Loading examples from", picklePath
+        examples = pickle.load(picklePath)
+    if actions == None or "classify" in actions:
+        print "==========", "Training Classifier", "=========="
+        best = optimize(examples, terms=terms)
+        saveResults(best["results"], os.path.join("outDir", "devel-results.tsv"))
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X
@@ -254,14 +281,20 @@ def run(dataPath, output=None, featureGroups=None, limit=None, numTerms=100, use
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="")
+    optparser.add_option("-a", "--actions", default=None, help="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
     optparser.add_option("-f", "--features", default="similar", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("-t", "--terms", default=100, type=int, help="")
     optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
+    optparser.add_option("--clear", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
+    if options.actions != None:
+        options.actions = options.actions.split(",")
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
-    run(options.dataPath, featureGroups=options.features.split(","), limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, output=options.output)
+    run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
+        limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
+        clear=options.clear)

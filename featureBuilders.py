@@ -1,3 +1,6 @@
+import gzip
+import csv
+
 class FeatureBuilder:
     def __init__(self):
         pass
@@ -13,6 +16,7 @@ class UniprotFeatureBuilder(FeatureBuilder):
         self.data = self.loadSimilar(inPath)
     
     def build(self, proteins):
+        print "Building Uniprot similar.txt features"
         for protein in proteins:
             protId = protein["id"]
             if id in self.data:
@@ -55,3 +59,26 @@ class UniprotFeatureBuilder(FeatureBuilder):
                         if protId not in self.data:
                             self.data[protId] = {"sub":set(), "fam":set()}
                         self.data[protId][section].add(group + subgroup)
+
+class BlastFeatureBuilder(FeatureBuilder):
+    def __init__(self, inPath):
+        self.inPath = inPath
+        self.columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
+    
+    def build(self, proteins):
+        print "Building BLASTP features"
+        protById = {}
+        for protein in proteins:
+            protById[protein["id"]] = protein
+        with gzip.open(self.inPath, "rt") as f:
+            reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
+            current = None
+            found = False
+            features = None
+            for row in reader:
+                if row["Uniprot_ID query"] != current:
+                    current = row["Uniprot_ID query"]
+                    found = current in protById
+                    features = protById[current]["features"] if found else None
+                if found:
+                    features["BLAST_" + row["Matched Uniprot_ID"]] = int(row["Hsp_score"])

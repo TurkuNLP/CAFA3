@@ -96,8 +96,12 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["sets"].append(protein["set"])
     # Build features
     if featureGroups == None or "seq" in featureGroups:
-        ufb = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
-        ufb.build(protObjs)
+        builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
+        builder.build(protObjs)
+    if featureGroups == None or "blast" in featureGroups:
+        builder = BlastFeatureBuilder(os.path.join(dataPath, "blastp_result_features", "target.all.features.tsv.gz"))
+        builder.build(protObjs)
+    builder = None
     # Prepare the examples
     mlb = MultiLabelBinarizer()
     dv = DictVectorizer(sparse=True)

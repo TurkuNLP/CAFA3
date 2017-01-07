@@ -13,6 +13,7 @@ import operator
 import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
+from sklearn.metrics.classification import precision_recall_fscore_support
 
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
@@ -116,25 +117,25 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def getResults(examples, scores, terms=None):
-    assert len(scores) == len(examples["label_names"])
-    results = []
-    for i in range(len(examples["label_names"])):
-        label = examples["label_names"][i]
-        result = {"score":scores[i], "id":label, "label_size":examples["label_size"][label]}
-        result["ns"] = None
-        result["name"] = None
-        if terms != None and label in terms:
-            term = terms[label]
-            result["ns"] = term["ns"]
-            result["name"] = term["name"]
-        results.append(result)
-    return results
+# def getResults(examples, scores, terms=None):
+#     assert len(scores) == len(examples["label_names"])
+#     results = []
+#     for i in range(len(examples["label_names"])):
+#         label = examples["label_names"][i]
+#         result = {"score":scores[i], "id":label, "label_size":examples["label_size"][label]}
+#         result["ns"] = None
+#         result["name"] = None
+#         if terms != None and label in terms:
+#             term = terms[label]
+#             result["ns"] = term["ns"]
+#             result["name"] = term["name"]
+#         results.append(result)
+#     return results
 
 def printResults(results, maxNumber=None):
     count = 0
     keys = ["score", "id", "label_size", "ns", "name"]
-    results = [[x[key] for key in keys] for x in results]
+    results = sorted(results, key=lambda x: x["auc"], reverse=True)
     for result in sorted(results, reverse=True):
         print result
         count += 1
@@ -144,9 +145,32 @@ def printResults(results, maxNumber=None):
 def saveResults(results, outPath):
     print "Writing results to", outPath
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["score", "id", "label_size", "ns", "name"], delimiter='\t')
+        dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "support", "id", "label_size", "ns", "name"], delimiter='\t')
         dw.writeheader()
-        dw.writerows(sorted(results, key=lambda x: x["score"], reverse=True))
+        dw.writerow(results["average"])
+        results = [x for x in results.values() if x["id"] != "average"]
+        dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
+
+def evaluate(labels, predicted, label_names, terms=None):
+    results = {}
+    # Get the average result
+    auc = roc_auc_score(labels, predicted, average="micro")
+    p, r, f, s = precision_recall_fscore_support(labels, predicted, average="micro")
+    # Get results per label
+    aucs = roc_auc_score(labels, predicted, average=None)
+    scores = precision_recall_fscore_support(labels, predicted, average=None)
+    results["average"] = {"id":"average", "ns":None, "name":None, "auc":auc, "precision":p, "recall":r, "fscore":f, "support":s}
+    assert len(aucs) == len(scores) == len(label_names)
+    for auc, score, label_name in zip(aucs, scores, label_names):
+        assert label_name not in results
+        result = {"id":label_name, "ns":None, "name":None, "auc":auc, 
+                  "precision":score[0], "recall":score[1], "fscore":score[2], "support":score[3]}
+        results[label_name] = result
+        if terms != None and label_name in terms:
+            term = terms[label_name]
+            result["ns"] = term["ns"]
+            result["name"] = term["name"]   
+    return results
 
 def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, terms=None):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
@@ -167,10 +191,11 @@ def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, te
         cls = RandomForestClassifier(**args)
         cls.fit(trainFeatures, trainLabels)
         predicted = cls.predict(develFeatures)
-        score = roc_auc_score(develLabels, predicted, average="micro")
-        scores = roc_auc_score(develLabels, predicted, average=None)
-        print "Average =", score
-        results = getResults(examples, scores, terms)
+        #score = roc_auc_score(develLabels, predicted, average="micro")
+        #scores = roc_auc_score(develLabels, predicted, average=None)
+        #print "Average =", score
+        #results = getResults(examples, scores, terms)
+        results = evaluate(develLabels, predicted, terms)
         printResults(results, 20)
         if best == None or score > best["score"]:
             best = {"score":score, "results":results, "args":args}

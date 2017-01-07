@@ -24,7 +24,7 @@ class UniprotFeatureBuilder(FeatureBuilder):
             if protId in self.data:
                 for section in ("sub", "fam"):
                     for feature in self.data[protId][section]:
-                        self.setFeature(protein, feature, 1)
+                        self.setFeature(protein, "SIM:" + section + ":" + feature, 1)
     
     def loadSimilar(self, inPath):
         self.data = {}
@@ -87,4 +87,4 @@ class BlastFeatureBuilder(FeatureBuilder):
                             found = current in protById
                             features = protById[current]["features"] if found else None
                         if found:
-                            features["BLAST_" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+                            features["BLAST:Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])

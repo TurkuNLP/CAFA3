@@ -96,7 +96,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["ids"].append(protein["id"])
         examples["sets"].append(protein["set"])
     # Build features
-    if featureGroups == None or "seq" in featureGroups:
+    if featureGroups == None or "similar" in featureGroups:
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
         builder.build(protObjs)
     if featureGroups == None or "blast" in featureGroups:
@@ -132,12 +132,19 @@ def getTopTerms(counts, num=1000):
 #         results.append(result)
 #     return results
 
+def metricsToString(result):
+    s = "a/f|p/r|s = " 
+    s += "%.2f" % result["auc"] + "/" + "%.2f" % result["fscore"]
+    s += "|" + "%.2f" % result["precision"] + "/" + "%.2f" % result["recall"] + "|" + "%.2f" % result["support"]
+    return s
+
 def printResults(results, maxNumber=None):
     count = 0
-    keys = ["score", "id", "label_size", "ns", "name"]
     results = sorted(results, key=lambda x: x["auc"], reverse=True)
     for result in sorted(results, reverse=True):
-        print result
+        if result == "average":
+            continue
+        print metricsToString(result), [result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]
         count += 1
         if count > maxNumber:
             break
@@ -151,28 +158,30 @@ def saveResults(results, outPath):
         results = [x for x in results.values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
 
-def evaluate(labels, predicted, label_names, terms=None):
+def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results = {}
     # Get the average result
     auc = roc_auc_score(labels, predicted, average="micro")
     p, r, f, s = precision_recall_fscore_support(labels, predicted, average="micro")
+    results["average"] = {"id":"average", "ns":None, "name":None, "auc":auc, "precision":p, "recall":r, "fscore":f, "support":s}
     # Get results per label
     aucs = roc_auc_score(labels, predicted, average=None)
     scores = precision_recall_fscore_support(labels, predicted, average=None)
-    results["average"] = {"id":"average", "ns":None, "name":None, "auc":auc, "precision":p, "recall":r, "fscore":f, "support":s}
-    assert len(aucs) == len(scores) == len(label_names)
+    assert len(aucs) == len(scores) == len(label_names), (len(aucs), len(scores), len(label_names))
     for auc, score, label_name in zip(aucs, scores, label_names):
         assert label_name not in results
         result = {"id":label_name, "ns":None, "name":None, "auc":auc, 
                   "precision":score[0], "recall":score[1], "fscore":score[2], "support":score[3]}
         results[label_name] = result
+        if label_size != None:
+            result["label_size"] = label_size[label_name]
         if terms != None and label_name in terms:
             term = terms[label_name]
             result["ns"] = term["ns"]
             result["name"] = term["name"]   
     return results
 
-def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, terms=None):
+def optimize(examples, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1, terms=None):
     grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -195,10 +204,11 @@ def optimize(examples, verbose=3, n_jobs = 1, scoring = "f1_micro", cvJobs=1, te
         #scores = roc_auc_score(develLabels, predicted, average=None)
         #print "Average =", score
         #results = getResults(examples, scores, terms)
-        results = evaluate(develLabels, predicted, terms)
+        results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
+        print "Average:", metricsToString(results["average"])
         printResults(results, 20)
-        if best == None or score > best["score"]:
-            best = {"score":score, "results":results, "args":args}
+        if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
+            best = {"results":results, "args":args}
         print time.strftime('%X %x %Z')
     return best
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)

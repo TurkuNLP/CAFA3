@@ -15,13 +15,13 @@ class FeatureBuilder:
 
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
-        self.data = self.loadSimilar(inPath)
+        self.loadSimilar(inPath)
     
     def build(self, proteins):
         print "Building Uniprot similar.txt features"
         for protein in proteins:
             protId = protein["id"]
-            if id in self.data:
+            if protId in self.data:
                 for section in ("sub", "fam"):
                     for feature in self.data[protId][section]:
                         self.setFeature(protein, feature, 1)

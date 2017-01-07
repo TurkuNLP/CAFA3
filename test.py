@@ -246,7 +246,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, limit=None, num
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
-    picklePath = os.path.join("outDir", "examples.pickle")
+    picklePath = os.path.join(outDir, "examples.pickle")
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
         proteins = defaultdict(lambda: dict())
@@ -261,16 +261,18 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, limit=None, num
         loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-        saveFeatureNames(examples)
+        saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
         print "Pickling examples to", picklePath
-        pickle.dump(examples, picklePath)
+        with open(picklePath, "wb") as pickeFile:
+            pickle.dump(examples, pickeFile)
     else:
         print "Loading examples from", picklePath
-        examples = pickle.load(picklePath)
+        with open(picklePath, "rb") as pickeFile:
+            examples = pickle.load(pickeFile)
     if actions == None or "classify" in actions:
         print "==========", "Training Classifier", "=========="
         best = optimize(examples, terms=terms)
-        saveResults(best["results"], os.path.join("outDir", "devel-results.tsv"))
+        saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X

@@ -143,7 +143,8 @@ def getTopTerms(counts, num=1000):
 #     return results
 
 def metricsToString(result, style="%.3f"):
-    return "a/f|p/r = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"]
+    return "a/f|p/r|tp/fp/tn/fn = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"] \
+        + "|" + "/".join([str(result.get(x, "-")) for x in ("tp", "fp", "tn", "fn")])
 
 def getResultsString(results, maxNumber=None, skipIds=None):
     count = 0
@@ -160,7 +161,7 @@ def getResultsString(results, maxNumber=None, skipIds=None):
 def saveResults(results, outPath):
     print "Writing results to", outPath
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "support", "id", "label_size", "ns", "name"], delimiter='\t')
+        dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "tp", "fp", "tn", "fn", "id", "label_size", "ns", "name"], delimiter='\t')
         dw.writeheader()
         dw.writerow(results["average"])
         results = [x for x in results.values() if x["id"] != "average"]
@@ -197,13 +198,20 @@ def importNamed(name):
 def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results = {}
     # Get the average result
-    results["average"] = {"id":"average", "ns":None, "name":None}
-    results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
+    results["average"] = {"id":"average", "ns":None, "name":None, "auc":0, "tp":None, "fp":None, "fn":None, "tn":None}
+    try:
+        results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
+    except ValueError as e:
+        print e
     results["average"]["fscore"] = f1_score(labels, predicted, average="micro")
     results["average"]["precision"] = precision_score(labels, predicted, average="micro")
     results["average"]["recall"] = recall_score(labels, predicted, average="micro")
     # Get results per label
-    aucs = roc_auc_score(labels, predicted, average=None)
+    try:
+        aucs = roc_auc_score(labels, predicted, average=None)
+    except ValueError as e:
+        print e
+        aucs = [0] * len(label_names)
     fscores = f1_score(labels, predicted, average=None)
     precisions = precision_score(labels, predicted, average=None)
     recalls = recall_score(labels, predicted, average=None)
@@ -211,14 +219,27 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     assert len(set(lengths)) == 1, lengths
     for auc, fscore, precision, recall, label_name in zip(aucs, fscores, precisions, recalls, label_names):
         assert label_name not in results
-        result = {"id":label_name, "ns":None, "name":None, "auc":auc, "precision":precision, "recall":recall, "fscore":fscore}
+        result = {"id":label_name, "ns":None, "name":None, "auc":auc, "precision":precision, "recall":recall, "fscore":fscore, "tp":0, "fp":0, "fn":0, "tn":0}
         results[label_name] = result
         if label_size != None:
             result["label_size"] = label_size[label_name]
         if terms != None and label_name in terms:
             term = terms[label_name]
             result["ns"] = term["ns"]
-            result["name"] = term["name"]   
+            result["name"] = term["name"]
+    # Calculate instances
+    stats = {x:{"tp":0, "fp":0, "fn":0, "tn":0} for x in label_names}
+    label_indices = range(len(label_names))
+    for gold, pred in zip(labels, predicted):
+        for i in label_indices:
+            if gold[i] == pred[i]:
+                stats[label_names[i]]["tp" if (gold[i] == 1) else "tn"] += 1
+            elif gold[i] == 1:
+                stats[label_names[i]]["fn"] += 1
+            elif pred[i] == 1:
+                stats[label_names[i]]["fp"] += 1
+    for key in stats:
+        results[key].update(stats[key])
     return results
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False):

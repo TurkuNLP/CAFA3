@@ -12,6 +12,13 @@ class FeatureBuilder:
     
     def setFeature(self, protein, feature, value=1):
         protein["features"][feature] = value
+    
+    def getMatchingPaths(self, inPath, pattern):
+        matching = []
+        for filename in sorted(os.listdir(self.inPath)):
+            if self.filePattern.match(filename) != None:
+                matching.append(os.path.join(self.inPath, filename))
+        return matching
 
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
@@ -73,18 +80,40 @@ class BlastFeatureBuilder(FeatureBuilder):
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
-        for filename in sorted(os.listdir(self.inPath)):
-            if self.filePattern.match(filename) != None:
-                print "Reading", filename
-                with gzip.open(os.path.join(self.inPath, filename), "rt") as f:
-                    reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
-                    current = None
-                    found = False
-                    features = None
-                    for row in reader:
-                        if row["Uniprot_ID query"] != current:
-                            current = row["Uniprot_ID query"]
-                            found = current in protById
-                            features = protById[current]["features"] if found else None
-                        if found:
-                            features["BLAST:Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+        for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
+            print "Reading", os.path.basename(filePath)
+            with gzip.open(filePath, "rt") as f:
+                reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
+                current = None
+                found = False
+                features = None
+                for row in reader:
+                    if row["Uniprot_ID query"] != current:
+                        current = row["Uniprot_ID query"]
+                        found = current in protById
+                        features = protById[current]["features"] if found else None
+                    if found:
+                        features["BLAST:Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+
+class TaxonomyFeatureBuilder(FeatureBuilder):
+    def __init__(self, inPath):
+        self.inPath = inPath
+        self.filePattern = re.compile("*_taxonomy_lineage.tsv.gz")
+    
+    def build(self, proteins):
+        print "Building taxonomy features"
+        protById = {}
+        for protein in proteins:
+            protById[protein["id"]] = protein
+        for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
+            print "Reading", os.path.basename(filePath)
+            with gzip.open(filePath, "rt") as f:
+                f.readline() # Skip the headers
+                for line in f:
+                    symbol, group, taxonomy = line.strip().split("\t")
+                    protein = protById.get(symbol)
+                    if protein is not None:
+                        features = protein["features"]
+                        for level in taxonomy.split(","):
+                            features["TAX:" + level] = 1
+                        

@@ -173,6 +173,28 @@ def saveResults(results, outPath):
         results = [x for x in results.values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
 
+def getMatch(gold, predicted):
+    if gold == predicted:
+        return "tp" if (gold == 1) else "tn"
+    else:
+        return "fn" if (gold == 1) else "fp"
+
+def savePredictions(exampleIds, labels, predicted, label_names, outPath):
+    print "Writing predictions to", outPath
+    assert len(labels) == len (predicted) == len(exampleIds)
+    label_indices = range(len(label_names))
+    rows = []
+    for gold, pred in zip(labels, predicted):
+        for i in label_indices:
+            if gold[i] == 1 or pred[i] == 1:
+                row = {"id":exampleIds[i], "label":label_names[i], "gold":gold[i], "predicted":pred[i]}
+                row["match"] = getMatch(gold[i], pred[i])
+                rows.append(row)
+    with open(outPath, "wt") as f:
+        dw = csv.DictWriter(f, ["id", "label", "gold", "predicted", "match"], delimiter='\t')
+        dw.writeheader()
+        dw.writerows(rows)
+
 def importNamed(name):
     asName = name.rsplit(".", 1)[-1]
     imported = False
@@ -238,17 +260,12 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     label_indices = range(len(label_names))
     for gold, pred in zip(labels, predicted):
         for i in label_indices:
-            if gold[i] == pred[i]:
-                stats[label_names[i]]["tp" if (gold[i] == 1) else "tn"] += 1
-            elif gold[i] == 1:
-                stats[label_names[i]]["fn"] += 1
-            elif pred[i] == 1:
-                stats[label_names[i]]["fp"] += 1
+            stats[label_names[i]][getMatch(gold[i], pred[i])] += 1
     for key in stats:
         results[key].update(stats[key])
     return results
 
-def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False):
+def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False, outDir=None):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -272,6 +289,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         if useOneVsRest:
             cls = OneVsRestClassifier(cls)
         cls.fit(trainFeatures, trainLabels)
+        print "Predicting the devel set"
         predicted = cls.predict(develFeatures)
         #score = roc_auc_score(develLabels, predicted, average="micro")
         #scores = roc_auc_score(develLabels, predicted, average=None)
@@ -281,8 +299,11 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         print "Average:", metricsToString(results["average"])
         print getResultsString(results, 20, ["average"])
         if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
-            best = {"results":results, "args":args}
+            best = {"results":results, "args":args, "predicted":predicted, "gold":develLabels}
         print time.strftime('%X %x %Z')
+    if outDir != None:
+        saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
+        savePredictions(examples["ids"], develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
     return best
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
     #clf.fit(X, y)
@@ -313,7 +334,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
-    picklePath = os.path.join(outDir, "examples.pickle")
+    picklePath = os.path.join(outDir, "examples.pickle.gz")
     examples = None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
@@ -330,19 +351,18 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
         print "Pickling examples to", picklePath
-        with open(picklePath, "wb") as picleFile:
-            pickle.dump(examples, picleFile)
+        with gzip.open(picklePath, "wb") as pickleFile:
+            pickle.dump(examples, pickleFile)
     if actions == None or "classify" in actions:
+        print "==========", "Training Classifier", "=========="
         if examples == None:
             print "Loading examples from", picklePath
-            with open(picklePath, "rb") as picleFile:
-                examples = pickle.load(picleFile)
+            with gzip.open(picklePath, "rb") as pickleFile:
+                examples = pickle.load(pickleFile)
         vectorizeExamples(examples)
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
-        print "==========", "Training Classifier", "=========="
-        best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest)
-        saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
+        best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest, outDir=outDir)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X

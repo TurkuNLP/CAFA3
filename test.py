@@ -228,6 +228,7 @@ def importNamed(name):
 #     return eval(string)
 
 def evaluate(labels, predicted, label_names, label_size=None, terms=None):
+    print "Evaluating the predictions"
     results = {}
     # Get the average result
     results["average"] = {"id":"average", "ns":None, "name":None, "auc":0, "tp":None, "fp":None, "fn":None, "tn":None}
@@ -305,6 +306,8 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         print getResultsString(results, 20, ["average"])
         if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
             best = {"results":results, "args":args, "predicted":predicted, "gold":develLabels}
+            if hasattr(cls, "feature_importances_"):
+                best["feature_importances"] = cls.feature_importances_
         print time.strftime('%X %x %Z')
     if outDir != None:
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))

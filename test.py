@@ -181,13 +181,14 @@ def getMatch(gold, predicted):
 
 def savePredictions(exampleIds, labels, predicted, label_names, outPath):
     print "Writing predictions to", outPath
-    assert len(labels) == len (predicted) == len(exampleIds)
+    lengths = [len(x) for x in (exampleIds, labels, predicted)]
+    assert len(set(lengths)) == 1, lengths
     label_indices = range(len(label_names))
     rows = []
-    for gold, pred in zip(labels, predicted):
+    for exampleId, gold, pred in zip(exampleIds, labels, predicted):
         for i in label_indices:
             if gold[i] == 1 or pred[i] == 1:
-                row = {"id":exampleIds[i], "label":label_names[i], "gold":gold[i], "predicted":pred[i]}
+                row = {"id":exampleId, "label":label_names[i], "gold":gold[i], "predicted":int(pred[i])}
                 row["match"] = getMatch(gold[i], pred[i])
                 rows.append(row)
     with open(outPath, "wt") as f:
@@ -276,6 +277,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
     develFeatures = examples["features"][develIndices]
     trainLabels = examples["labels"][trainIndices]
     develLabels = examples["labels"][develIndices]
+    develIds = [examples["ids"][i] for i in range(len(sets)) if sets[i] == "devel"]
     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
     if useOneVsRest:
         print "Using OneVsRestClassifier"
@@ -303,7 +305,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         print time.strftime('%X %x %Z')
     if outDir != None:
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
-        savePredictions(examples["ids"], develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
+        savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
     return best
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
     #clf.fit(X, y)

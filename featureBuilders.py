@@ -98,7 +98,7 @@ class BlastFeatureBuilder(FeatureBuilder):
 class TaxonomyFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
         self.inPath = inPath
-        self.filePattern = re.compile("*_taxonomy_lineage.tsv.gz")
+        self.filePattern = re.compile("map\_.+\_taxonomy\.tsv\.gz") #"*_taxonomy_lineage.tsv.gz"
     
     def build(self, proteins):
         print "Building taxonomy features"
@@ -110,9 +110,12 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
             with gzip.open(filePath, "rt") as f:
                 f.readline() # Skip the headers
                 for line in f:
-                    symbol, group, taxonomy = line.strip().split("\t")
+                    #print line.strip().split("\t")
+                    symbol, rest = line.strip().split("\t")
                     protein = protById.get(symbol)
                     if protein is not None:
+                        print rest.split("\t")
+                        group, taxonomy = rest.split()
                         features = protein["features"]
                         for level in taxonomy.split(","):
                             features["TAX:" + level] = 1

@@ -72,6 +72,15 @@ def saveFeatureNames(names, outPath):
         f.write("index\tname\n")
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
+    
+def vectorizeExamples(examples):
+    mlb = MultiLabelBinarizer()
+    dv = DictVectorizer(sparse=True)
+    examples["features"] = dv.fit_transform(examples["features"])
+    examples["feature_names"] = dv.feature_names_
+    examples["labels"] = mlb.fit_transform(examples["labels"])
+    examples["label_names"] = mlb.classes_
+    print "Vectorized", len(examples["labels"]), "examples with", len(examples["feature_names"]), "unique features and", len(examples["label_names"]), "unique labels"
         
 # def splitProteins(proteins):
 #     datasets = {"devel":[], "train":[], "test":[]}
@@ -82,7 +91,7 @@ def saveFeatureNames(names, outPath):
 
 def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
-    examples = {"labels":[], "features":None, "ids":[], "sets":[], "label_names":[], "label_size":{}}
+    examples = {"labels":[], "features":[], "ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     if limit:
         protIds = protIds[0:limit]
@@ -113,14 +122,11 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = BlastFeatureBuilder(os.path.join(dataPath, "blastp_result_features"))
         builder.build(protObjs)
     builder = None
+    examples["features"] = [x["features"] for x in protObjs]
+    for protObj in protObjs:
+        del protObj["features"]
     # Prepare the examples
-    mlb = MultiLabelBinarizer()
-    dv = DictVectorizer(sparse=True)
-    examples["features"] = dv.fit_transform([x["features"] for x in protObjs])
-    examples["feature_names"] = dv.feature_names_
-    examples["labels"] = mlb.fit_transform(examples["labels"])
-    examples["label_names"] = mlb.classes_
-    print "Built", len(examples["labels"]), "examples with", len(examples["feature_names"]), "unique features"
+    print "Built", len(examples["labels"]), "examples" # with", len(examples["feature_names"]), "unique features"
     return examples
     #return mlb.fit_transform(examples["labels"]), dv.fit_transform(examples["features"])
 
@@ -308,6 +314,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
     picklePath = os.path.join(outDir, "examples.pickle")
+    examples = None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
         proteins = defaultdict(lambda: dict())
@@ -322,15 +329,17 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-        saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
         print "Pickling examples to", picklePath
-        with open(picklePath, "wb") as pickeFile:
-            pickle.dump(examples, pickeFile)
-    else:
-        print "Loading examples from", picklePath
-        with open(picklePath, "rb") as pickeFile:
-            examples = pickle.load(pickeFile)
+        with open(picklePath, "wb") as picleFile:
+            pickle.dump(examples, picleFile)
     if actions == None or "classify" in actions:
+        if examples == None:
+            print "Loading examples from", picklePath
+            with open(picklePath, "rb") as picleFile:
+                examples = pickle.load(picleFile)
+        vectorizeExamples(examples)
+        if not os.path.exists(os.path.join(outDir, "features.tsv")):
+            saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
         print "==========", "Training Classifier", "=========="
         best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest)
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))

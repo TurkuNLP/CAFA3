@@ -111,11 +111,9 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
                 f.readline() # Skip the headers
                 for line in f:
                     #print line.strip().split("\t")
-                    symbol, rest = line.strip().split("\t")
+                    symbol, taxonomy = line.strip().split("\t")
                     protein = protById.get(symbol)
                     if protein is not None:
-                        print rest.split("\t")
-                        group, taxonomy = rest.split()
                         features = protein["features"]
                         for level in taxonomy.split(","):
                             features["TAX:" + level] = 1

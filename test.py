@@ -16,7 +16,10 @@ from sklearn.metrics.ranking import roc_auc_score
 import shutil
 import cPickle as pickle
 from sklearn.multiclass import OneVsRestClassifier
-import json
+try:
+    import ujson as json
+except ImportError:
+    import json
 import statistics
 
 def openAny(inPath, mode):

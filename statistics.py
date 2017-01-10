@@ -12,6 +12,7 @@ def getCounts(examples):
         numLabels = numpy.count_nonzero(labels)
         category = ",".join(sets)
         counts[category].append(numLabels)
+    return counts
 
 def makeGraph(counts, outPath):
     fig = plt.figure()
@@ -19,11 +20,12 @@ def makeGraph(counts, outPath):
     for key in sorted(counts.keys()):
         values = sorted(counts[key])
         total = float(len(values))
-        x = [x / total for x in range(len(values))]
+        x = [x / total for x in reversed(range(len(values)))]
         ax.plot(x, values)
     plt.grid()
-    plt.ylabel("Y")
-    plt.xlabel("X")
+    plt.legend()
+    plt.ylabel("labels")
+    plt.xlabel("proteins")
     if outPath != None:
         plt.savefig(outPath)
     

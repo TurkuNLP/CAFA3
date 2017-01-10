@@ -16,6 +16,7 @@ from sklearn.metrics.ranking import roc_auc_score
 import shutil
 import cPickle as pickle
 from sklearn.multiclass import OneVsRestClassifier
+import json
 
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
@@ -409,7 +410,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
-    picklePath = os.path.join(outDir, "examples.pickle.gz")
+    exampleFilePath = os.path.join(outDir, "examples.json.gz")
     examples = None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
@@ -429,15 +430,15 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         defineSets(proteins, cafaTargets)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
-        print "Pickling examples to", picklePath
-        with gzip.open(picklePath, "wb") as pickleFile:
-            pickle.dump(examples, pickleFile)
+        print "Saving examples to", exampleFilePath
+        with gzip.open(exampleFilePath, "wt") as pickleFile:
+            json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
     if actions == None or "classify" in actions:
         print "==========", "Training Classifier", "=========="
         if examples == None:
-            print "Loading examples from", picklePath
-            with gzip.open(picklePath, "rb") as pickleFile:
-                examples = pickle.load(pickleFile)
+            print "Loading examples from", exampleFilePath
+            with gzip.open(exampleFilePath, "rt") as pickleFile:
+                examples = json.load(pickleFile) #pickle.load(pickleFile)
         vectorizeExamples(examples)
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))

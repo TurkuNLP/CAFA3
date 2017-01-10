@@ -45,26 +45,42 @@ def loadGOTerms(inPath):
             terms[row["id"]] = row
     return terms
 
-def addProtein(proteins, protId, cafaId, sequence, filename):
+def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, verbose=False, counts=None):
     assert len(sequence) > 0
     if protId not in proteins:
         proteins[protId]["seq"] = sequence
         proteins[protId]["id"] = protId
-        proteins[protId]["cafa_id"] = cafaId
+        proteins[protId]["cafa_ids"] = [cafaId] if cafaId else None
         proteins[protId]["file"] = [filename]
+        proteins[protId]["terms"] = {}
+        counts["unique"] += 1
     else:
+        counts["multiple"] += 1
         if proteins[protId]["seq"] != sequence:
-            print "WARNING, sequence mismatch for", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
+            if verbose:
+                print "WARNING, sequence mismatch for", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
+            counts["mismatch"] += 1
+            counts["mismatches"].append(protId)
+            if replaceSeq:
+                proteins[protId]["seq"] = sequence
         assert proteins[protId]["id"] == protId, (proteins[protId], (protId, cafaId, sequence, filename))
         proteins[protId]["file"] += [filename]
         if cafaId != None:
-            if proteins[protId]["cafa_id"] != None:
-                print "WARNING, duplicate CAFA target", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
-            proteins[protId]["cafa_id"] = cafaId
+            if proteins[protId]["cafa_ids"] != None:
+                if verbose:
+                    print "WARNING, duplicate CAFA target", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
+                counts["duplicate_id"] += 1
+                counts["duplicate_ids"].append(protId)
+                proteins[protId]["cafa_ids"].append(cafaId)
+            else:
+                proteins[protId]["cafa_ids"] = [cafaId]
          
 def loadFASTA(inPath, proteins, cafaHeader=False):
     print "Loading sequences from", inPath
     filename = os.path.basename(inPath)
+    counts = defaultdict(int)
+    counts["mismatches"] = []
+    counts["duplicate_ids"] = []
     with openAny(inPath, "rt") as f:
         protId = None
         cafaId = None
@@ -73,7 +89,7 @@ def loadFASTA(inPath, proteins, cafaHeader=False):
             if line.startswith(">"):
                 # Add already read protein
                 if protId != None:
-                    addProtein(proteins, protId, cafaId, sequence, filename)
+                    addProtein(proteins, protId, cafaId, sequence, filename, counts=counts)
                 protId = None
                 cafaId = None
                 sequence = ""
@@ -84,8 +100,9 @@ def loadFASTA(inPath, proteins, cafaHeader=False):
             else:
                 sequence += line.strip()
         if protId != None:
-            addProtein(proteins, protId, cafaId, sequence, filename)               
+            addProtein(proteins, protId, cafaId, sequence, filename, counts=counts)               
             #print seq.id, seq.seq
+    print dict(counts)
 
 def loadSplit(inPath, proteins):
     for dataset in ("train", "devel", "test"):
@@ -100,7 +117,7 @@ def loadSplit(inPath, proteins):
 def defineSets(proteins, cafaTargets):
     counts = defaultdict(int)
     for protein in proteins.values():
-        cafaSet = ["cafa"] if protein["cafa_id"] != None else []
+        cafaSet = ["cafa"] if protein["cafa_ids"] != None else []
         origSet = [protein["origSet"]] if protein.get("origSet") != None else []
         if len(cafaSet) > 0:
             if cafaTargets == "overlap":
@@ -111,7 +128,7 @@ def defineSets(proteins, cafaTargets):
                 raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
         else:
             protein["sets"] = origSet
-        category = ",".join(origSet + cafaSet) + "=>" + ",".join(protein["sets"])
+        category = ",".join(cafaSet + origSet) + "=>" + ",".join(protein["sets"])
         counts[category] += 1
     print "Defined sets:", dict(counts)
 
@@ -153,15 +170,15 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         if limitTerms:
             labels = [x for x in labels if x in limitTerms]
         labels = sorted(labels)
-        if len(labels) == 0:
-            labels = ["no_annotations"]
+        #if len(labels) == 0:
+        #    labels = ["no_annotations"]
         for label in labels:
             if label not in examples["label_size"]:
                 examples["label_size"][label] = 0
             examples["label_size"][label] += 1
         examples["labels"].append(labels)
         examples["ids"].append(protein["id"])
-        examples["sets"].append(protein["set"])
+        examples["sets"].append(protein["sets"])
     # Build features
     print "Building features, feature groups = ", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:

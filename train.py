@@ -20,12 +20,13 @@ char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 
-
 model_dir = './model/'
-# TODO: Save model + other needed files after training: model, go_id mapping
+# TODO: Save model + other needed files after training: model, go_id mapping, blast id map
 # TODO: Try some fancy pooling approach
 # TODO: Add normal features (needs data from Suwisa)
 # TODO: Add naive blast baseline for comparison (needs data from Suwisa)
+# TODO: Get prediction statistics
+# TODO: Convert data to a generator
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -77,9 +78,10 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
     split_ids = read_split_ids(split_path)
     
     x = []
+    blast_x = []
     y = []
-    
-    for i, (prot_id, seq) in enumerate(pairwise(seq_data)):
+
+    for i, (prot_id, seq) in enumerate(pairwise(seq_data[:4000])):
         if i % 10000 == 0:
             print i
         prot_id = prot_id.strip().strip('>')
@@ -92,20 +94,59 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
         y_v = np.zeros((len(ann_ids)), dtype='int')
         y_v[ann_id_list] = 1
         x.append(seq_id_list)
+        blast_x.append(generate_blast_features(prot_id))
         y.append(y_v)
-        
+    
+    
+
+    
     #import pdb; pdb.set_trace()
     x = sequence.pad_sequences(x, timesteps)
+    blast_x = np.array(blast_x)
     y = np.array(y)
     
-    return {'sequence': x, 'labels': y}
+    return {'sequence': x, 'labels': y, 'features': blast_x}
+
+def generate_blast_data():
+    """
+    Creates blast features for the given sequences.
+    """
+    print 'Reading blast info'
+    blast_f = gzip.open('./data/Swissprot_blast.tsv.gz')
+    blast_data = blast_f.readlines()
+    blast_dict = defaultdict(list)
+    blast_hits = set()
+    blast_prot = set([line.strip().split('\t')[0] for line in blast_data])
+    for e, line in enumerate(blast_data):
+        if e % 1000000 == 0:
+            print e
+        data = line.strip().split('\t')
+        prot_id = data[0]
+        hit = data[4]
+        if hit not in blast_prot:
+            continue
+        score = float(data[9])
+        blast_dict[prot_id].append((hit, score))
+        blast_hits.add(hit)
+        
+    blast_hit_ids = {hit: i for i, hit in enumerate(list(sorted(blast_hits)))}
+    
+    return blast_dict, blast_hit_ids
+
+blast_dict, blast_hit_ids = generate_blast_data()
+
+def generate_blast_features(prot_id):
+    x = np.zeros((len(blast_hit_ids)))
+    for hit, score in blast_dict[prot_id]:
+        x[blast_hit_ids[hit]] = score
+    return x
 
 def train():
     print 'Generating training data'
-    ann_ids, reverse_ann_ids = get_annotation_ids('./data/Swissprot_propagated.tsv.gz', top=1000)
+    ann_ids, reverse_ann_ids = get_annotation_ids('./data/Swissprot_propagated.tsv.gz', top=4000)
     train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
     devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
-    test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
+    #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
     
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
@@ -121,20 +162,24 @@ def train():
     #lstm = LSTM(100)(mask)
     #convs.append(lstm)
     
+    feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
+    convs.append(feature_input)
+    
     encoded = merge(convs, mode='concat')
     
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
     
-    model = Model(inputs, predictions)
+    model = Model([inputs, feature_input], predictions)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
     print model.summary()
     
     print 'Training model'
-    es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1)
+    es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1, mode='max')
     cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), save_best_only=True,verbose=1)
     model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
             
     import pdb; pdb.set_trace()
+    
     
 if __name__ == '__main__':
     train()

@@ -54,12 +54,12 @@ def addProtein(proteins, protId, cafaId, sequence, filename):
         proteins[protId]["file"] = [filename]
     else:
         if proteins[protId]["seq"] != sequence:
-            print "WARNING, sequence mismatch for", (proteins[protId], (protId, cafaId, sequence, filename))
+            print "WARNING, sequence mismatch for", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
         assert proteins[protId]["id"] == protId, (proteins[protId], (protId, cafaId, sequence, filename))
         proteins[protId]["file"] += [filename]
         if cafaId != None:
             if proteins[protId]["cafa_id"] != None:
-                print "WARNING, duplicate CAFA target for for", (proteins[protId], (protId, cafaId, sequence, filename))
+                print "WARNING, duplicate CAFA target", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
             proteins[protId]["cafa_id"] = cafaId
          
 def loadFASTA(inPath, proteins, cafaHeader=False):
@@ -400,9 +400,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
             print "Loading CAFA3 targets"
-            cafaTargetsDir = os.path.join(options.dataPath, "CAFA3_targets", "Target_files")
-            for filename in os.listdir(cafaTargetsDir):
-                loadFASTA(os.path.join(cafaTargetsDir, filename), proteins, True)
+            loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
         termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
         print "Unique terms:", len(termCounts)

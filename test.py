@@ -190,7 +190,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
         builder.build(protObjs)
     if featureGroups == None or "blast" in featureGroups:
-        builder = BlastFeatureBuilder(os.path.join(dataPath, "blastp_result_features"))
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

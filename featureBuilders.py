@@ -13,11 +13,14 @@ class FeatureBuilder:
     def setFeature(self, protein, feature, value=1):
         protein["features"][feature] = value
     
-    def getMatchingPaths(self, inPath, pattern):
+    def getMatchingPaths(self, inPaths, patterns):
         matching = []
-        for filename in sorted(os.listdir(self.inPath)):
-            if self.filePattern.match(filename) != None:
-                matching.append(os.path.join(self.inPath, filename))
+        for inPath in inPaths:
+            for filename in sorted(os.listdir(inPath)):
+                for pattern in patterns:
+                    if pattern.match(filename) != None:
+                        matching.append(os.path.join(inPath, filename))
+                        break
         return matching
     
     def beginCoverage(self, protIds):
@@ -28,7 +31,7 @@ class FeatureBuilder:
         self.coveredIds.add(protId)
     
     def finishCoverage(self):
-        print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins
+        print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins, [len(self.coveredIds), self.numProteins]
         self.numProteins = None
         self.coveredIds = None 
 
@@ -85,9 +88,9 @@ class UniprotFeatureBuilder(FeatureBuilder):
                         self.data[protId][section].add(group + subgroup)
 
 class BlastFeatureBuilder(FeatureBuilder):
-    def __init__(self, inPath):
-        self.inPath = inPath
-        self.filePattern = re.compile("target.[0-9]+.features_tsv.gz")
+    def __init__(self, inPaths):
+        self.inPaths = inPaths
+        self.filePatterns = (re.compile("target.[0-9]+.features_tsv.gz"), re.compile("Swissprot\_sequence\_[0-9].features\_tsv.gz"))
         self.columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
     
     def build(self, proteins):
@@ -96,8 +99,8 @@ class BlastFeatureBuilder(FeatureBuilder):
         for protein in proteins:
             protById[protein["id"]] = protein
         self.beginCoverage(protById.keys())
-        for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
-            print "Reading", os.path.basename(filePath)
+        for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
+            print "Reading", filePath
             with gzip.open(filePath, "rt") as f:
                 reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
                 current = None
@@ -125,8 +128,8 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
         for protein in proteins:
             protById[protein["id"]] = protein
         self.beginCoverage(protById.keys())
-        for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
-            print "Reading", os.path.basename(filePath)
+        for filePath in self.getMatchingPaths([self.inPath], [self.filePattern]):
+            print "Reading", filePath
             with gzip.open(filePath, "rt") as f:
                 f.readline() # Skip the headers
                 for line in f:

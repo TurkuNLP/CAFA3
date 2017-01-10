@@ -93,11 +93,21 @@ def loadSplit(inPath, proteins):
                 proteins[protId]["origSet"] = dataset
 
 def defineSets(proteins, cafaTargets):
-    if cafaTargets == "overlap":
-        for protein in proteins.values():
-            protein["sets"] = [protein["origSet"]]
-            if protein["cafa_id"] != None:
-                protein["sets"] = [protein["origSet"]]
+    counts = defaultdict(int)
+    for protein in proteins.values():
+        isCafaTarget = protein["cafa_id"]
+        protein["sets"] = ["cafa"] if isCafaTarget != None else []
+        if protein.get("origSet") != None:
+            if isCafaTarget:
+                if cafaTargets == "overlap":
+                    protein["sets"] = [protein["origSet"]]
+                elif cafaTargets == "separate":
+                    protein["sets"] = ["cafa"]
+                else:
+                    raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
+        category = ",".join((["cafa"] if isCafaTarget != None else []) + ([protein["origSet"]] if protein.get("origSet")) != None else []) + "=>" + ",".join(protein.sets())
+        counts[category] += 1
+    print "Defined sets:", dict(counts)
 
 def saveFeatureNames(names, outPath):
     print "Saving feature names to", outPath
@@ -382,18 +392,19 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "==========", "Building Examples", "=========="
         proteins = defaultdict(lambda: dict())
         loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-        termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
         if cafaTargets != "skip":
             cafaTargetsDir = os.path.join(options.dataPath, "CAFA3_targets")
             for filename in os.listdir(cafaTargetsDir):
                 loadFASTA(os.path.join(cafaTargets, filename), proteins, True)
         print "Proteins:", len(proteins)
+        termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
         print "Using", len(topTerms), "most common GO terms"
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
         loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
+        defineSets(proteins, cafaTargets)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
         print "Pickling examples to", picklePath
@@ -430,7 +441,7 @@ if __name__=="__main__":
     optparser.add_option("--onevsrest", default=False, action="store_true", help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
-    optparser.add_option("--targets", default="skip", help="skip")
+    optparser.add_option("--targets", default="skip", help="skip, overlap or separate")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
@@ -440,4 +451,5 @@ if __name__=="__main__":
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
-        clear=options.clear, classifier=options.classifier, classifierArgs=options.args, useOneVsRest=options.onevsrest)
+        clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
+        useOneVsRest=options.onevsrest, cafaTargets=options.targets)

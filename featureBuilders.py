@@ -19,6 +19,18 @@ class FeatureBuilder:
             if self.filePattern.match(filename) != None:
                 matching.append(os.path.join(self.inPath, filename))
         return matching
+    
+    def beginCoverage(self, protIds):
+        self.numProteins = len(set(protIds))
+        self.coveredIds = set()
+    
+    def addToCoverage(self, protId):
+        self.coveredIds.add(protId)
+    
+    def finishCoverage(self):
+        print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins
+        self.numProteins = None
+        self.coveredIds = None 
 
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
@@ -26,12 +38,15 @@ class UniprotFeatureBuilder(FeatureBuilder):
     
     def build(self, proteins):
         print "Building Uniprot similar.txt features"
+        self.beginCoverage([x.get("id") for x in proteins])
         for protein in proteins:
             protId = protein["id"]
             if protId in self.data:
+                self.addToCoverage(protId)
                 for section in ("sub", "fam"):
                     for feature in self.data[protId][section]:
                         self.setFeature(protein, "SIM:" + section + ":" + feature, 1)
+        self.finishCoverage()
     
     def loadSimilar(self, inPath):
         self.data = {}
@@ -80,6 +95,7 @@ class BlastFeatureBuilder(FeatureBuilder):
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
+        self.beginCoverage(protById.keys())
         for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
             print "Reading", os.path.basename(filePath)
             with gzip.open(filePath, "rt") as f:
@@ -92,8 +108,11 @@ class BlastFeatureBuilder(FeatureBuilder):
                         current = row["Uniprot_ID query"]
                         found = current in protById
                         features = protById[current]["features"] if found else None
+                        if found:
+                            self.addToCoverage(current)
                     if found:
                         features["BLAST:Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+        self.finishCoverage()
 
 class TaxonomyFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
@@ -105,6 +124,7 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
+        self.beginCoverage(protById.keys())
         for filePath in self.getMatchingPaths(self.inPath, self.filePattern):
             print "Reading", os.path.basename(filePath)
             with gzip.open(filePath, "rt") as f:
@@ -114,7 +134,8 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
                     symbol, taxonomy = line.strip().split("\t")
                     protein = protById.get(symbol)
                     if protein is not None:
+                        self.addToCoverage(protein["id"])
                         features = protein["features"]
                         for level in taxonomy.split(","):
                             features["TAX:" + level] = 1
-                        
+        self.finishCoverage()

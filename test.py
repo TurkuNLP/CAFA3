@@ -166,7 +166,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     protObjs = [proteins[key] for key in protIds]
     for protein in protObjs:
         # Initialize features
-        protein["features"] = {"dummy":1}
+        protein["features"] = {"DUMMY:dummy":1}
         # Build labels
         labels = protein["terms"].keys()
         if limitTerms:

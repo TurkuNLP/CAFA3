@@ -17,6 +17,7 @@ import shutil
 import cPickle as pickle
 from sklearn.multiclass import OneVsRestClassifier
 import json
+import statistics
 
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
@@ -405,7 +406,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     Stream.openLog(os.path.join(options.output, "log.txt"))
     if actions != None:
         for action in actions:
-            assert action in ("build", "classify")
+            assert action in ("build", "classify", "statistics")
     assert cafaTargets in ("skip", "overlap", "separate")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
@@ -433,16 +434,22 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "Saving examples to", exampleFilePath
         with gzip.open(exampleFilePath, "wt") as pickleFile:
             json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
-    if actions == None or "classify" in actions:
-        print "==========", "Training Classifier", "=========="
+        vectorizeExamples(examples)
+    elif len([x for x in actions if x != "build"]) > 0:
+        print "==========", "Loading Examples", "=========="
         if examples == None:
             print "Loading examples from", exampleFilePath
             with gzip.open(exampleFilePath, "rt") as pickleFile:
                 examples = json.load(pickleFile) #pickle.load(pickleFile)
         vectorizeExamples(examples)
+    if actions == None or "classify" in actions:
+        print "==========", "Training Classifier", "=========="
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
         best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest, outDir=outDir)
+    if actions == None or "statistics" in actions:
+        print "==========", "Calculating Statistics", "=========="
+        statistics.makeStatistics(examples, outDir)
     #y, X = buildExamples(proteins, None, set([x[0] for x in topTerms]))
     #print y
     #print X

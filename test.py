@@ -348,7 +348,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
     develFeatures = examples["features"][develIndices]
     trainLabels = examples["labels"][trainIndices]
     develLabels = examples["labels"][develIndices]
-    develIds = [examples["ids"][i] for i in range(len(sets)) if sets[i] == "devel"]
+    develIds = [examples["ids"][i] for i in range(len(sets)) if "devel" in sets[i]]
     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
     if useOneVsRest:
         print "Using OneVsRestClassifier"

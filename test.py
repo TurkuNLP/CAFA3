@@ -42,18 +42,44 @@ def loadGOTerms(inPath):
             terms[row["id"]] = row
     return terms
 
-def loadSequences(inPath, proteins):
+def addProtein(proteins, protId, cafaId, sequence, filename):
+    assert len(buffer) > 0
+    if protId not in proteins:
+        proteins[protId]["seq"] = sequence
+        proteins[protId]["id"] = protId
+        proteins[protId]["cafa_id"] = cafaId
+        proteins[protId]["file"] = [filename]
+    else:
+        assert proteins[protId]["seq"] == sequence
+        assert proteins[protId]["id"] == protId
+        proteins[protId]["file"] += [filename]
+        if cafaId != None:
+            assert proteins[protId]["cafa_id"] == None
+            proteins[protId]["cafa_id"] = cafaId
+         
+def loadFASTA(inPath, proteins, cafaHeader=False):
     print "Loading sequences from", inPath
+    filename = os.path.basename(inPath)
     with gzip.open(inPath, "rt") as f:
-        header = None
+        protId = None
+        cafaId = None
+        sequence = ""
         for line in f:
-            if header == None:
+            if protId == None:
+                if protId != None:
+                    addProtein(proteins, protId, cafaId, sequence, filename)
+                protId = None
+                cafaId = None
+                sequence = ""
+                # Begin new protein
                 assert line.startswith(">")
-                header = line[1:].strip()
+                protId = line[1:].strip()
+                if cafaHeader:
+                    cafaId, protId = protId.split()
             else:
-                proteins[header]["seq"] = line.strip()
-                proteins[header]["id"] = header
-                header = None
+                sequence += line.strip()
+        if protId != None:
+            addProtein(proteins, protId, cafaId, sequence, filename)               
             #print seq.id, seq.seq
 
 def loadSplit(inPath, proteins):
@@ -64,7 +90,14 @@ def loadSplit(inPath, proteins):
             for line in f:
                 protId = line.strip()
                 assert protId in proteins
-                proteins[protId]["set"] = dataset
+                proteins[protId]["origSet"] = dataset
+
+def defineSets(proteins, cafaTargets):
+    if cafaTargets == "overlap":
+        for protein in proteins.values():
+            protein["sets"] = [protein["origSet"]]
+            if protein["cafa_id"] != None:
+                protein["sets"] = [protein["origSet"]]
 
 def saveFeatureNames(names, outPath):
     print "Saving feature names to", outPath
@@ -275,8 +308,8 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
     sets = examples["sets"]
-    trainIndices = [i for i in range(len(sets)) if sets[i] == "train"]
-    develIndices = [i for i in range(len(sets)) if sets[i] == "devel"]
+    trainIndices = [i for i in range(len(sets)) if "train" in sets[i]]
+    develIndices = [i for i in range(len(sets)) if "devel" in sets[i]]
     trainFeatures = examples["features"][trainIndices]
     develFeatures = examples["features"][develIndices]
     trainLabels = examples["labels"][trainIndices]
@@ -328,7 +361,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useOneVsRest=False, limit=None, numTerms=100, useTestSet=False, clear=False):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useOneVsRest=False, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip"):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -339,6 +372,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     if actions != None:
         for action in actions:
             assert action in ("build", "classify")
+    assert cafaTargets in ("skip", "overlap", "separate")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
@@ -347,8 +381,12 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
         proteins = defaultdict(lambda: dict())
-        loadSequences(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+        loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+        if cafaTargets != "skip":
+            cafaTargetsDir = os.path.join(options.dataPath, "CAFA3_targets")
+            for filename in os.listdir(cafaTargetsDir):
+                loadFASTA(os.path.join(cafaTargets, filename), proteins, True)
         print "Proteins:", len(proteins)
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
@@ -392,6 +430,7 @@ if __name__=="__main__":
     optparser.add_option("--onevsrest", default=False, action="store_true", help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
+    optparser.add_option("--targets", default="skip", help="skip")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:

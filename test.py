@@ -17,6 +17,9 @@ import shutil
 import cPickle as pickle
 from sklearn.multiclass import OneVsRestClassifier
 
+def openAny(inPath, mode):
+    return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
+
 def loadAnnotations(inPath, proteins):
     print "Loading annotations from", inPath
     counts = defaultdict(int)
@@ -43,36 +46,38 @@ def loadGOTerms(inPath):
     return terms
 
 def addProtein(proteins, protId, cafaId, sequence, filename):
-    assert len(buffer) > 0
+    assert len(sequence) > 0
     if protId not in proteins:
         proteins[protId]["seq"] = sequence
         proteins[protId]["id"] = protId
         proteins[protId]["cafa_id"] = cafaId
         proteins[protId]["file"] = [filename]
     else:
-        assert proteins[protId]["seq"] == sequence
-        assert proteins[protId]["id"] == protId
+        if proteins[protId]["seq"] != sequence:
+            print "WARNING, sequence mismatch for", (proteins[protId], (protId, cafaId, sequence, filename))
+        assert proteins[protId]["id"] == protId, (proteins[protId], (protId, cafaId, sequence, filename))
         proteins[protId]["file"] += [filename]
         if cafaId != None:
-            assert proteins[protId]["cafa_id"] == None
+            if proteins[protId]["cafa_id"] != None:
+                print "WARNING, duplicate CAFA target for for", (proteins[protId], (protId, cafaId, sequence, filename))
             proteins[protId]["cafa_id"] = cafaId
          
 def loadFASTA(inPath, proteins, cafaHeader=False):
     print "Loading sequences from", inPath
     filename = os.path.basename(inPath)
-    with gzip.open(inPath, "rt") as f:
+    with openAny(inPath, "rt") as f:
         protId = None
         cafaId = None
         sequence = ""
         for line in f:
-            if protId == None:
+            if line.startswith(">"):
+                # Add already read protein
                 if protId != None:
                     addProtein(proteins, protId, cafaId, sequence, filename)
                 protId = None
                 cafaId = None
                 sequence = ""
                 # Begin new protein
-                assert line.startswith(">")
                 protId = line[1:].strip()
                 if cafaHeader:
                     cafaId, protId = protId.split()
@@ -95,17 +100,18 @@ def loadSplit(inPath, proteins):
 def defineSets(proteins, cafaTargets):
     counts = defaultdict(int)
     for protein in proteins.values():
-        isCafaTarget = protein["cafa_id"]
-        protein["sets"] = ["cafa"] if isCafaTarget != None else []
-        if protein.get("origSet") != None:
-            if isCafaTarget:
-                if cafaTargets == "overlap":
-                    protein["sets"] = [protein["origSet"]]
-                elif cafaTargets == "separate":
-                    protein["sets"] = ["cafa"]
-                else:
-                    raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
-        category = ",".join((["cafa"] if isCafaTarget != None else []) + ([protein["origSet"]] if protein.get("origSet")) != None else []) + "=>" + ",".join(protein.sets())
+        cafaSet = ["cafa"] if protein["cafa_id"] != None else []
+        origSet = [protein["origSet"]] if protein.get("origSet") != None else []
+        if len(cafaSet) > 0:
+            if cafaTargets == "overlap":
+                protein["sets"] = cafaSet + origSet
+            elif cafaTargets == "separate":
+                protein["sets"] = cafaSet
+            else:
+                raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
+        else:
+            protein["sets"] = origSet
+        category = ",".join(origSet + cafaSet) + "=>" + ",".join(protein["sets"])
         counts[category] += 1
     print "Defined sets:", dict(counts)
 
@@ -393,9 +399,10 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         proteins = defaultdict(lambda: dict())
         loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
-            cafaTargetsDir = os.path.join(options.dataPath, "CAFA3_targets")
+            print "Loading CAFA3 targets"
+            cafaTargetsDir = os.path.join(options.dataPath, "CAFA3_targets", "Target_files")
             for filename in os.listdir(cafaTargetsDir):
-                loadFASTA(os.path.join(cafaTargets, filename), proteins, True)
+                loadFASTA(os.path.join(cafaTargetsDir, filename), proteins, True)
         print "Proteins:", len(proteins)
         termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
         print "Unique terms:", len(termCounts)

@@ -81,7 +81,7 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
     blast_x = []
     y = []
 
-    for i, (prot_id, seq) in enumerate(pairwise(seq_data[:4000])):
+    for i, (prot_id, seq) in enumerate(pairwise(seq_data)):
         if i % 10000 == 0:
             print i
         prot_id = prot_id.strip().strip('>')
@@ -163,8 +163,10 @@ def train():
     #convs.append(lstm)
     
     feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
-    convs.append(feature_input)
-    
+    feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
+    convs.append(feature_encoding)
+    #
+    #encoded = feature_encoding
     encoded = merge(convs, mode='concat')
     
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
@@ -176,7 +178,7 @@ def train():
     print 'Training model'
     es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1, mode='max')
     cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), save_best_only=True,verbose=1)
-    model.fit(train_data, train_data, nb_epoch=100, batch_size=128, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
+    model.fit(train_data, train_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
             
     import pdb; pdb.set_trace()
     

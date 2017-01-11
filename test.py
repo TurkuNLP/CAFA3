@@ -16,6 +16,10 @@ from sklearn.metrics.ranking import roc_auc_score
 import shutil
 import cPickle as pickle
 from sklearn.multiclass import OneVsRestClassifier
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
+from sklearn.feature_selection.variance_threshold import VarianceThreshold
+from sklearn.multioutput import MultiOutputClassifier
 try:
     import ujson as json
 except ImportError:
@@ -128,7 +132,10 @@ def defineSets(proteins, cafaTargets):
             if cafaTargets == "overlap":
                 protein["sets"] = cafaSet + origSet
             elif cafaTargets == "separate":
-                protein["sets"] = cafaSet
+                if "train" in origSet:
+                    protein["sets"] = cafaSet
+                else:
+                    protein["sets"] = cafaSet + origSet
             else:
                 raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
         else:
@@ -144,13 +151,19 @@ def saveFeatureNames(names, outPath):
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
     
-def vectorizeExamples(examples):
+def vectorizeExamples(examples, featureGroups):
     mlb = MultiLabelBinarizer()
+    examples["labels"] = mlb.fit_transform(examples["labels"])
+    examples["label_names"] = mlb.classes_
     dv = DictVectorizer(sparse=True)
     examples["features"] = dv.fit_transform(examples["features"])
     examples["feature_names"] = dv.feature_names_
-    examples["labels"] = mlb.fit_transform(examples["labels"])
-    examples["label_names"] = mlb.classes_
+    if featureGroups != None and "select" in featureGroups:
+        threshold = .1
+        print "Selecting features", examples["features"].shape[1]
+        examples["features"] = VarianceThreshold(threshold * (1 - threshold)).fit_transform(examples["features"])
+        print "Selected features", examples["features"].shape[1]
+        #examples["features"] = SelectKBest(chi2, k=1000).fit_transform(examples["features"], examples["labels"])
     print "Vectorized", len(examples["labels"]), "examples with", len(examples["feature_names"]), "unique features and", len(examples["label_names"]), "unique labels"
         
 # def splitProteins(proteins):
@@ -364,7 +377,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         print "Learning with args", args
         cls = Cls(**args)
         if useOneVsRest:
-            cls = OneVsRestClassifier(cls)
+            cls = MultiOutputClassifier(cls) # OneVsRestClassifier(cls)
         cls.fit(trainFeatures, trainLabels)
         print "Predicting the devel set"
         predicted = cls.predict(develFeatures)
@@ -437,14 +450,14 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "Saving examples to", exampleFilePath
         with gzip.open(exampleFilePath, "wt") as pickleFile:
             json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
-        vectorizeExamples(examples)
+        vectorizeExamples(examples, featureGroups)
     elif len([x for x in actions if x != "build"]) > 0:
         print "==========", "Loading Examples", "=========="
         if examples == None:
             print "Loading examples from", exampleFilePath
             with gzip.open(exampleFilePath, "rt") as pickleFile:
                 examples = json.load(pickleFile) #pickle.load(pickleFile)
-        vectorizeExamples(examples)
+        vectorizeExamples(examples, featureGroups)
     if actions == None or "classify" in actions:
         print "==========", "Training Classifier", "=========="
         if not os.path.exists(os.path.join(outDir, "features.tsv")):

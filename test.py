@@ -19,12 +19,38 @@ from sklearn.multiclass import OneVsRestClassifier
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import chi2
 from sklearn.feature_selection.variance_threshold import VarianceThreshold
-from sklearn.multioutput import MultiOutputClassifier
+from sklearn.multioutput import MultiOutputClassifier, _fit_estimator
+from sklearn.utils.validation import check_X_y, has_fit_parameter
+from sklearn.externals.joblib.parallel import Parallel, delayed
 try:
     import ujson as json
 except ImportError:
     import json
 import statistics
+
+class MyMultiOutputClassifier(MultiOutputClassifier):
+    def fit(self, X, y, sample_weight=None):
+        if not hasattr(self.estimator, "fit"):
+            raise ValueError("The base estimator should implement a fit method")
+    
+        X, y = check_X_y(X, y,
+                         multi_output=True,
+                         accept_sparse=True)
+    
+        if y.ndim == 1:
+            raise ValueError("y must have at least two dimensions for "
+                             "multi target regression but has only one.")
+    
+        if (sample_weight is not None and
+                not has_fit_parameter(self.estimator, 'sample_weight')):
+            raise ValueError("Underlying regressor does not support"
+                             " sample weights.")
+    
+        self.estimators_ = Parallel(n_jobs=self.n_jobs, verbose=3)(delayed(_fit_estimator)(
+            self.estimator, X, y[:, i], sample_weight) for i in range(y.shape[1]))
+        return self
+
+#MultiOutputClassifier.fit = newFit
 
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
@@ -377,7 +403,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
         print "Learning with args", args
         cls = Cls(**args)
         if useOneVsRest:
-            cls = MultiOutputClassifier(cls) # OneVsRestClassifier(cls)
+            cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
         cls.fit(trainFeatures, trainLabels)
         print "Predicting the devel set"
         predicted = cls.predict(develFeatures)

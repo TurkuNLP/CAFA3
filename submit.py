@@ -18,12 +18,14 @@ SLURMJobTemplate = """#!/bin/bash -l
 #SBATCH -t %wallTime
 ## number of processes
 #SBATCH -n %cores
+## partition
+#SBATCH -p %partition
 
 mkdir -p %outDir
 
 %command"""
 
-def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", dummy=False, clear=False):
+def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", partition="serial", dummy=False, clear=False):
     if not dummy:
         if os.path.exists(outDir):
             if clear:
@@ -37,7 +39,7 @@ def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", dumm
     
     command = command.replace("%outDir")
     template = SLURMJobTemplate
-    for param, value in [("%command", command), ("%outDir", outDir), ("%job", job), ("%memory", memory), ("%cores", cores), ("%wallTime", wallTime)]:
+    for param, value in [("%command", command), ("%outDir", outDir), ("%job", job), ("%memory", memory), ("%cores", cores), ("%wallTime", wallTime), ("%partition", partition)]:
         template = template.replace(param, value)
     print "==========", "Template", "=========="
     print template
@@ -55,11 +57,14 @@ if __name__=="__main__":
     optparser.add_option('-c','--command', help='')
     optparser.add_option("-o", "--outDir", default=None, help="")
     optparser.add_option('-j','--job', default=None, help='')
-    optparser.add_option('-m','--memory', default=4000, type=int, help='')
+    optparser.add_option('-m','--memory', default=4, type=int, help='')
     optparser.add_option('-r','--cores', default=1, type=int, help='')
     optparser.add_option('-t','--time', default="48:00:00", help='')
+    optparser.add_option('-p','--partition', default="serial", help='')
     optparser.add_option("--dummy", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
-    submit(options.command, options.outDir, options.job, options.memory, options.cores, options.time, options.dummy, options.clear)
+    if options.job == None:
+        options.job = os.path.basename(options.outDir)
+    submit(options.command, options.outDir, options.job, options.memory, options.cores, options.time, options.partition, options.dummy, options.clear)

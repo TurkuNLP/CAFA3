@@ -234,6 +234,12 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     if featureGroups == None or "blast" in featureGroups:
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")])
         builder.build(protObjs)
+    if featureGroups == None or "delta" in featureGroups:
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA")
+        builder.build(protObjs)
+    if featureGroups == None or "interpro" in featureGroups:
+        builder = InterproScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
+        builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]
     for protObj in protObjs:
@@ -379,6 +385,10 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     for key in stats:
         results[key].update(stats[key])
     return results
+
+# def countInstances(labels, predicted):
+#     tp = labels.multiply(predicted)
+#     tp = labels.multiply(predicted)
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False, outDir=None):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}

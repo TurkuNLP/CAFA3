@@ -88,7 +88,8 @@ class UniprotFeatureBuilder(FeatureBuilder):
                         self.data[protId][section].add(group + subgroup)
 
 class BlastFeatureBuilder(FeatureBuilder):
-    def __init__(self, inPaths):
+    def __init__(self, inPaths, tag="BLAST"):
+        self.tag = tag
         self.inPaths = inPaths
         self.filePatterns = (re.compile("target.[0-9]+.features_tsv.gz"), re.compile("Swissprot\_sequence\_[0-9].features\_tsv.gz"))
         self.columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
@@ -114,16 +115,46 @@ class BlastFeatureBuilder(FeatureBuilder):
                         if found:
                             self.addToCoverage(current)
                     if found:
-                        features["BLAST:Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+                        features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
         self.finishCoverage()
 
-class TaxonomyFeatureBuilder(FeatureBuilder):
-    def __init__(self, inPath):
-        self.inPath = inPath
-        self.filePattern = re.compile("map\_.+\_taxonomy\.tsv\.gz") #"*_taxonomy_lineage.tsv.gz"
+class MultiFileFeatureBuilder(FeatureBuilder):
+    def __init__(self, inPaths, filePatterns, tag):
+        self.tag = tag
+        self.inPaths = inPaths
+        self.filePatterns = filePatterns
     
     def build(self, proteins):
-        print "Building taxonomy features"
+        print "Building InterProScan features"
+        protById = {}
+        for protein in proteins:
+            protById[protein["id"]] = protein
+        self.beginCoverage(protById.keys())
+        for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
+            print "Reading", filePath
+            with gzip.open(filePath, "rt") as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                current = None
+                found = False
+                features = None
+                for row in reader:
+                    if row["Uniprot_ID query"] != current:
+                        current = row["Uniprot_ID query"]
+                        found = current in protById
+                        features = protById[current]["features"] if found else None
+                        if found:
+                            self.addToCoverage(current)
+                    if found:
+                        features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
+        self.finishCoverage()
+
+class KeyValueFeatureBuilder(FeatureBuilder):
+    def __init__(self):
+        self.skipHeader = None
+        self.message = "Building features"
+    
+    def build(self, proteins):
+        print self.message
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
@@ -131,14 +162,58 @@ class TaxonomyFeatureBuilder(FeatureBuilder):
         for filePath in self.getMatchingPaths([self.inPath], [self.filePattern]):
             print "Reading", filePath
             with gzip.open(filePath, "rt") as f:
-                f.readline() # Skip the headers
+                if self.skipHeader:
+                    f.readline() # Skip the headers
                 for line in f:
                     #print line.strip().split("\t")
-                    symbol, taxonomy = line.strip().split("\t")
-                    protein = protById.get(symbol)
+                    key, value = line.strip().split("\t")
+                    protein = protById.get(key)
                     if protein is not None:
                         self.addToCoverage(protein["id"])
-                        features = protein["features"]
-                        for level in taxonomy.split(","):
-                            features["TAX:" + level] = 1
+                        self.setValue(protein, value)
+        self.finishCoverage()
+    
+    def setValue(self, protein, value):
+        protein["features"][self.tag] = float(value)
+
+class TaxonomyFeatureBuilder(KeyValueFeatureBuilder):
+    def __init__(self, inPath):
+        super(TaxonomyFeatureBuilder, self).__init__()
+        self.message = "Building taxonomy features"
+        self.inPath = inPath
+        self.filePattern = re.compile("map\_.+\_taxonomy\.tsv\.gz") #"*_taxonomy_lineage.tsv.gz"
+    
+    def setValue(self, protein, value):
+        features = protein["features"]
+        for taxonomyLevel in value.split(","):
+            features[self.tag + ":" + taxonomyLevel] = 1
+
+class InterproScanFeatureBuilder(FeatureBuilder):
+    def __init__(self, inPaths, tag="IPS"):
+        self.tag = tag
+        self.inPaths = inPaths
+        self.filePatterns = [re.compile(".+_noGO.tsv.gz")]
+    
+    def build(self, proteins):
+        print "Building InterProScan features"
+        protById = {}
+        for protein in proteins:
+            protById[protein["id"]] = protein
+        self.beginCoverage(protById.keys())
+        for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
+            print "Reading", filePath
+            with gzip.open(filePath, "rt") as f:
+                reader = csv.DictReader(f, delimiter='\t')
+                current = None
+                found = False
+                features = None
+                for row in reader:
+                    if row["Uniprot_ID query"] != current:
+                        current = row["Uniprot_ID query"]
+                        found = current in protById
+                        features = protById[current]["features"] if found else None
+                        if found:
+                            self.addToCoverage(current)
+                    if found:
+                        features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
         self.finishCoverage()

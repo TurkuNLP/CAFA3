@@ -41,6 +41,7 @@ class FeatureBuilder:
 
 class MultiFileFeatureBuilder(FeatureBuilder):
     def __init__(self, inPaths, filePatterns, tag, message):
+        FeatureBuilder.__init__(self)
         self.tag = tag
         self.inPaths = inPaths
         self.filePatterns = filePatterns
@@ -62,7 +63,7 @@ class MultiFileFeatureBuilder(FeatureBuilder):
 
 class KeyValueFeatureBuilder(MultiFileFeatureBuilder):
     def __init__(self, inPaths, filePatterns, tag, message, skipHeader=True):
-        super(TaxonomyFeatureBuilder, self).__init__(inPaths, filePatterns, tag, message)
+        MultiFileFeatureBuilder.__init__(self, inPaths, filePatterns, tag, message)
         self.skipHeader = skipHeader
     
     def buildForFile(self, filePath, protById):
@@ -78,17 +79,18 @@ class KeyValueFeatureBuilder(MultiFileFeatureBuilder):
                     self.setValue(protein, value)
     
     def setValue(self, protein, value):
-        protein["features"][self.tag] = float(value)
+        protein["features"][self.tag + ":value"] = float(value)
 
-class TSVFeatureBuilder(MultiFileFeatureBuilder):
-    def __init__(self, inPaths, filePatterns, tag, message, protColumn, columns=None):
-        super(MultiFileFeatureBuilder, self).__init__(inPaths, filePatterns, tag, message)
+class CSVFeatureBuilder(MultiFileFeatureBuilder):
+    def __init__(self, inPaths, filePatterns, tag, message, protColumn, columns=None, delimiter='\t'):
+        MultiFileFeatureBuilder.__init__(self, inPaths, filePatterns, tag, message)
         self.columns = columns
         self.protColumn = protColumn
+        self.delimiter = delimiter
     
     def buildForFile(self, filePath, protById):
         with gzip.open(filePath, "rt") as f:
-            reader = csv.DictReader(f, delimiter='\t', fieldnames=self.columns)
+            reader = csv.DictReader(f, delimiter=self.delimiter, fieldnames=self.columns)
             currentId = None
             found = False
             features = None
@@ -109,26 +111,34 @@ class TSVFeatureBuilder(MultiFileFeatureBuilder):
 # Feature Builders
 ###############################################################################
 
-class BlastFeatureBuilder(TSVFeatureBuilder):
+class BlastFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths, tag="BLAST"): 
         filePatterns = (re.compile("target.[0-9]+.features_tsv.gz"), re.compile("Swissprot\_sequence\_[0-9].features\_tsv.gz"))
         columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
-        super(MultiFileFeatureBuilder, self).__init__(inPaths, filePatterns, tag, "Building BLASTP features", "Uniprot_ID query", columns)
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLASTP features", "Uniprot_ID query", columns)
     
     def setRow(self, features, row):
         features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
 
 class TaxonomyFeatureBuilder(KeyValueFeatureBuilder):
-    def __init__(self, inPath):
-        super(TaxonomyFeatureBuilder, self).__init__()
-        self.message = "Building taxonomy features"
-        self.inPath = inPath
-        self.filePattern = re.compile("map\_.+\_taxonomy\.tsv\.gz") #"*_taxonomy_lineage.tsv.gz"
+    def __init__(self, inPaths):
+        filePatterns = [re.compile("map\_.+\_taxonomy\.tsv\.gz")]
+        KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "TAX", "Building taxonomy features", skipHeader=True)
     
     def setValue(self, protein, value):
         features = protein["features"]
         for taxonomyLevel in value.split(","):
             features[self.tag + ":" + taxonomyLevel] = 1
+
+class NucPredFeatureBuilder(KeyValueFeatureBuilder):
+    def __init__(self, inPaths):
+        filePatterns = [re.compile(".+\__nucPred\.tsv\.gz")]
+        KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", skipHeader=False)
+
+class GPIAnchoringFeatureBuilder(KeyValueFeatureBuilder):
+    def __init__(self, inPaths):
+        filePatterns = [re.compile(".+\__nucPred\.tsv\.gz")]
+        KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", skipHeader=False)
 
 class InterproScanFeatureBuilder(FeatureBuilder):
     def __init__(self, inPaths, tag="IPS"):
@@ -162,6 +172,7 @@ class InterproScanFeatureBuilder(FeatureBuilder):
 
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
+        FeatureBuilder.__init__(self)
         self.loadSimilar(inPath)
     
     def build(self, proteins):

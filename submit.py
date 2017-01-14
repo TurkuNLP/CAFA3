@@ -21,11 +21,15 @@ SLURMJobTemplate = """#!/bin/bash -l
 ## partition
 #SBATCH -p %partition
 
+module load biopython-env
 mkdir -p %outDir
 
-%command"""
+cd %commandPath
+%command
+seff $SLURM_JOBID"""
 
 def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", partition="serial", dummy=False, clear=False):
+    global SLURMJobTemplate
     if not dummy:
         if os.path.exists(outDir):
             if clear:
@@ -37,10 +41,15 @@ def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", part
         print "Making output directory", outDir
         os.makedirs(outDir)
     
-    command = command.replace("%outDir")
+    #command = command.replace("%outDir")
+    commandPath = os.path.abspath(os.getcwd())
     template = SLURMJobTemplate
-    for param, value in [("%command", command), ("%outDir", outDir), ("%job", job), ("%memory", memory), ("%cores", cores), ("%wallTime", wallTime), ("%partition", partition)]:
-        template = template.replace(param, value)
+    for param, value in [("%commandPath", commandPath), ("%command", command), ("%outDir", outDir), ("%job", job), ("%memory", memory), ("%cores", cores), ("%wallTime", wallTime), ("%partition", partition)]:
+        if value == None:
+            raise Exception("Undefined parameter '" + param + "'")
+        print (param, value)
+        template = template.replace(param, str(value))
+        print template
     print "==========", "Template", "=========="
     print template
     print "===================================="
@@ -54,7 +63,7 @@ def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", part
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="")
-    optparser.add_option('-c','--command', help='')
+    optparser.add_option('-c','--command', default=None, help='')
     optparser.add_option("-o", "--outDir", default=None, help="")
     optparser.add_option('-j','--job', default=None, help='')
     optparser.add_option('-m','--memory', default=4, type=int, help='')
@@ -67,4 +76,6 @@ if __name__=="__main__":
     
     if options.job == None:
         options.job = os.path.basename(options.outDir)
-    submit(options.command, options.outDir, options.job, options.memory, options.cores, options.time, options.partition, options.dummy, options.clear)
+    submit(command=options.command, outDir=options.outDir, job=options.job, memory=options.memory, 
+           cores=options.cores, wallTime=options.time, partition=options.partition, 
+           dummy=options.dummy, clear=options.clear)

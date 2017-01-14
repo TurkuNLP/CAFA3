@@ -226,7 +226,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     print "Building features, feature groups = ", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
-        builder = TaxonomyFeatureBuilder(os.path.join(dataPath, "Taxonomy"))
+        builder = TaxonomyFeatureBuilder([os.path.join(dataPath, "Taxonomy")])
         builder.build(protObjs)
     if featureGroups == None or "similar" in featureGroups:
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))

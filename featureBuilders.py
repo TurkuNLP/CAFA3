@@ -20,6 +20,8 @@ class FeatureBuilder:
     def getMatchingPaths(self, inPaths, patterns):
         matching = []
         for inPath in inPaths:
+            if not os.path.exists(inPath):
+                raise Exception("Cannot find path " + str(inPath))
             for filename in sorted(os.listdir(inPath)):
                 for pattern in patterns:
                     if pattern.match(filename) != None:

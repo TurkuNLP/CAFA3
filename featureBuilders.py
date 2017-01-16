@@ -104,10 +104,12 @@ class CSVFeatureBuilder(MultiFileFeatureBuilder):
                     if found:
                         self.addToCoverage(currentId)
                 if found:
-                    self.setRow(features, row)
+                    self.setRow(features, row, filePath)
     
-    def setRow(self, features, row):
-        raise NotImplementedError()
+    def setRow(self, features, row, filePath):
+        for key in row:
+            if key != self.protColumn:
+                features[self.tag + ":" + key] = float(row[key])
     
 ###############################################################################
 # Feature Builders
@@ -119,7 +121,7 @@ class BlastFeatureBuilder(CSVFeatureBuilder):
         columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLASTP features", "Uniprot_ID query", columns)
     
-    def setRow(self, features, row):
+    def setRow(self, features, row, filePath):
         features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
 
 class TaxonomyFeatureBuilder(KeyValueFeatureBuilder):
@@ -137,41 +139,25 @@ class NucPredFeatureBuilder(KeyValueFeatureBuilder):
         filePatterns = [re.compile(".+\__nucPred\.tsv\.gz")]
         KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", skipHeader=False)
 
-class GPIAnchoringFeatureBuilder(KeyValueFeatureBuilder):
+class GPIAnchoringFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
-        filePatterns = [re.compile(".+\__nucPred\.tsv\.gz")]
-        KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", skipHeader=False)
+        filePatterns = [re.compile(".+\__predGPI\.tsv\.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "GPI", "Building predGPI features", "protein_id")
 
-class InterproScanFeatureBuilder(FeatureBuilder):
-    def __init__(self, inPaths, tag="IPS"):
-        self.tag = tag
-        self.inPaths = inPaths
-        self.filePatterns = [re.compile(".+_noGO.tsv.gz")]
+class InterproScanFeatureBuilder(CSVFeatureBuilder):
+    def __init__(self, inPaths):
+        filePatterns = [re.compile(".+_noGO.tsv.gz"), re.compile(".+_GO.tsv.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterproScan features", "protein_id")
     
-    def build(self, proteins):
-        print "Building InterProScan features"
-        protById = {}
-        for protein in proteins:
-            protById[protein["id"]] = protein
-        self.beginCoverage(protById.keys())
-        for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
-            print "Reading", filePath
-            with gzip.open(filePath, "rt") as f:
-                reader = csv.DictReader(f, delimiter='\t')
-                current = None
-                found = False
-                features = None
-                for row in reader:
-                    if row["Uniprot_ID query"] != current:
-                        current = row["Uniprot_ID query"]
-                        found = current in protById
-                        features = protById[current]["features"] if found else None
-                        if found:
-                            self.addToCoverage(current)
-                    if found:
-                        features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])
-        self.finishCoverage()
-
+    def setRow(self, features, row, filePath):
+        if "GOid" in row:
+            for key in ("score", "evalue"):
+                if "score" in row:
+                    features[self.tag + ":" + filePath.split(".")[0] + ":" + key] = float(row[key])
+                    break
+        else:
+            
+    
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
         FeatureBuilder.__init__(self)

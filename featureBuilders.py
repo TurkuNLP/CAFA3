@@ -144,22 +144,21 @@ class GPIAnchoringFeatureBuilder(CSVFeatureBuilder):
         filePatterns = [re.compile(".+\__predGPI\.tsv\.gz")]
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "GPI", "Building predGPI features", "protein_id")
 
-class InterproScanFeatureBuilder(CSVFeatureBuilder):
+class InterProScanFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
         filePatterns = [re.compile(".+_noGO.tsv.gz"), re.compile(".+_GO.tsv.gz")]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterproScan features", "protein_id")
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterProScan features", "protein_id")
     
     def setRow(self, features, row, filePath):
-        for matchType in ("GOid", "ac"):
-            if matchType in row:
-                foundValue = False
-                for valueType in ("score", "evalue"):
-                    if valueType in row:
-                        features[self.tag + ":" + filePath.split(".")[0] + ":" + matchType + ":" + row[matchType].replace(":", "_") + ":" + valueType] = float(row[valueType])
-                        foundValue = True
-                        break # use either 'score' or 'evalue'
-                break # use either 'Goid' or 'ac'
-            
+        idType = "GOid" if "GOid" in row else "ac"
+        if "score" in row:
+            valueType = "score"
+        elif "evalue" in row:
+            valueType = "evalue"
+        else:
+            valueType = "bin"
+        value = 1.0 if valueType == "bin" else row[valueType]
+        features[self.tag + ":" + filePath.split(".")[0] + ":" + idType + ":" + row[idType].replace(":", "_") + ":" + valueType] = value           
     
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):

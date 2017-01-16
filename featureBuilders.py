@@ -150,15 +150,24 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterProScan features", "protein_id")
     
     def setRow(self, features, row, filePath):
+        # Choose the primary identifier for the feature
         idType = "GOid" if "GOid" in row else "ac"
+        # Choose the numeric value to use for the feature
         if "score" in row:
             valueType = "score"
         elif "evalue" in row:
             valueType = "evalue"
         else:
             valueType = "bin"
+        # Use the chosen numeric value for the feature or use 1.0 if this is a binary feature
         value = 1.0 if valueType == "bin" else row[valueType]
-        features[self.tag + ":" + filePath.split(".")[0] + ":" + idType + ":" + row[idType].replace(":", "_") + ":" + valueType] = value           
+        # Define the full name of the feature
+        name = self.tag + ":" + filePath.split(".")[0] + ":" + idType + "=" + row[idType].replace(":", "_") + ":" + valueType
+        # If the value is for a motif match, add this information to the feature name
+        if "motifNumber" in row:
+            name += ":motif=" + row["motifNumber"]
+        # Add the feature for the protein
+        features[name] = value           
     
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):

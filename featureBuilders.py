@@ -150,12 +150,15 @@ class InterproScanFeatureBuilder(CSVFeatureBuilder):
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterproScan features", "protein_id")
     
     def setRow(self, features, row, filePath):
-        if "GOid" in row:
-            for key in ("score", "evalue"):
-                if "score" in row:
-                    features[self.tag + ":" + filePath.split(".")[0] + ":" + key] = float(row[key])
-                    break
-        else:
+        for matchType in ("GOid", "ac"):
+            if matchType in row:
+                foundValue = False
+                for valueType in ("score", "evalue"):
+                    if valueType in row:
+                        features[self.tag + ":" + filePath.split(".")[0] + ":" + matchType + ":" + row[matchType].replace(":", "_") + ":" + valueType] = float(row[valueType])
+                        foundValue = True
+                        break # use either 'score' or 'evalue'
+                break # use either 'Goid' or 'ac'
             
     
 class UniprotFeatureBuilder(FeatureBuilder):

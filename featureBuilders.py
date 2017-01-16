@@ -151,14 +151,13 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
     
     def setRow(self, features, row, filePath):
         # Choose the primary identifier for the feature
-        idType = "GOid" if "GOid" in row else "ac"
+        for idType in ("GOid", "ac", "db"):
+            if idType in row:
+                break
         # Choose the numeric value to use for the feature
-        if "score" in row:
-            valueType = "score"
-        elif "evalue" in row:
-            valueType = "evalue"
-        else:
-            valueType = "bin"
+        for valueType in ("score", "evalue", "bin"):
+            if valueType in row:
+                break
         # Use the chosen numeric value for the feature or use 1.0 if this is a binary feature
         value = 1.0 if valueType == "bin" else row[valueType]
         # Define the full name of the feature

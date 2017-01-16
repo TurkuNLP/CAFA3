@@ -238,7 +238,13 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA")
         builder.build(protObjs)
     if featureGroups == None or "interpro" in featureGroups:
-        builder = InterproScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
+        builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
+        builder.build(protObjs)
+    if featureGroups == None or "predgpi" in featureGroups:
+        builder = GPIAnchoringFeatureBuilder([os.path.join(dataPath, "predGPI")])
+        builder.build(protObjs)
+    if featureGroups == None or "nucpred" in featureGroups:
+        builder = NucPredFeatureBuilder([os.path.join(dataPath, "nucPred")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

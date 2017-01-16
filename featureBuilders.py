@@ -159,7 +159,7 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
             if valueType in row:
                 break
         # Use the chosen numeric value for the feature or use 1.0 if this is a binary feature
-        value = 1.0 if valueType == "bin" else row[valueType]
+        value = 1.0 if valueType == "bin" else float(row[valueType])
         # Define the full name of the feature
         fileTag = os.path.basename(filePath).split(".")[0]
         name = self.tag + ":" + fileTag + ":" + idType + "=" + row[idType].replace(":", "_") + ":" + valueType
@@ -167,7 +167,7 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
         if "motifNumber" in row:
             name += ":motif=" + row["motifNumber"]
         # Add the feature for the protein
-        features[name] = value           
+        features[name] = value
     
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):

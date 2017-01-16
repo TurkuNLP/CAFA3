@@ -161,7 +161,8 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
         # Use the chosen numeric value for the feature or use 1.0 if this is a binary feature
         value = 1.0 if valueType == "bin" else row[valueType]
         # Define the full name of the feature
-        name = self.tag + ":" + filePath.split(".")[0] + ":" + idType + "=" + row[idType].replace(":", "_") + ":" + valueType
+        fileTag = os.path.basename(filePath).split(".")[0]
+        name = self.tag + ":" + fileTag + ":" + idType + "=" + row[idType].replace(":", "_") + ":" + valueType
         # If the value is for a motif match, add this information to the feature name
         if "motifNumber" in row:
             name += ":motif=" + row["motifNumber"]

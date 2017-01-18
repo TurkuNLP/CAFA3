@@ -85,7 +85,7 @@ def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, v
     if protId not in proteins:
         proteins[protId]["seq"] = sequence
         proteins[protId]["id"] = protId
-        proteins[protId]["cafa_ids"] = [cafaId] if cafaId else None
+        proteins[protId]["cafa_ids"] = [cafaId] if cafaId else []
         proteins[protId]["file"] = [filename]
         proteins[protId]["terms"] = {}
         counts["unique"] += 1
@@ -101,14 +101,14 @@ def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, v
         assert proteins[protId]["id"] == protId, (proteins[protId], (protId, cafaId, sequence, filename))
         proteins[protId]["file"] += [filename]
         if cafaId != None:
-            if proteins[protId]["cafa_ids"] != None:
+            if len(proteins[protId]["cafa_ids"]) > 0:
                 if verbose:
                     print "WARNING, duplicate CAFA target", protId, cafaId, ":", (proteins[protId], (protId, cafaId, sequence, filename))
                 counts["duplicate_id"] += 1
                 counts["duplicate_ids"].append(protId)
                 proteins[protId]["cafa_ids"].append(cafaId)
             else:
-                proteins[protId]["cafa_ids"] = [cafaId]
+                proteins[protId]["cafa_ids"] += [cafaId]
          
 def loadFASTA(inPath, proteins, cafaHeader=False):
     print "Loading sequences from", inPath
@@ -152,7 +152,7 @@ def loadSplit(inPath, proteins):
 def defineSets(proteins, cafaTargets):
     counts = defaultdict(int)
     for protein in proteins.values():
-        cafaSet = ["cafa"] if protein["cafa_ids"] != None else []
+        cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
         origSet = [protein["origSet"]] if protein.get("origSet") != None else []
         if len(cafaSet) > 0:
             if cafaTargets == "overlap":
@@ -239,7 +239,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["sets"].append(protein["sets"])
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
-    print "Building features, feature groups = ", featureGroups
+    print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
         builder = TaxonomyFeatureBuilder([os.path.join(dataPath, "Taxonomy")])
         builder.build(protObjs)
@@ -312,7 +312,7 @@ def saveResults(data, outStem, label_names):
         dw.writerow(data["results"]["average"])
         results = [x for x in data["results"].values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
-    savePredictions(data["ids"], data["labels"], data["predicted"], label_names, outStem + "-predictions.tsv")
+    savePredictions(data, label_names, outStem + "-predictions.tsv")
 
 def getMatch(gold, predicted):
     if gold == predicted:
@@ -320,22 +320,28 @@ def getMatch(gold, predicted):
     else:
         return "fn" if (gold == 1) else "fp"
 
-def savePredictions(data, label_names, cafa_ids, outPath):
+def savePredictions(data, label_names, outPath):
     print "Writing predictions to", outPath
-    lengths = [len(data[x]) for x in ("ids", "labels", "predicted", "cafa_ids")]
+    keys = ["ids", "gold", "predicted", "cafa_ids"]
+    hasProbabilities = data.get("probabilities") != None
+    if hasProbabilities:
+        keys += ["probabilities"]
+    lengths = [len(data[x]) for x in keys]
     assert len(set(lengths)) == 1, lengths
     label_indices = range(len(label_names))
     rows = []
     for i in range(len(data["ids"])):
-        gold = data["labels"][i]
+        gold = data["gold"][i]
         pred = data["predicted"][i]
+        cafa_ids = ",".join(data["cafa_ids"][i])
         for labelIndex in label_indices:
             if gold[labelIndex] == 1 or pred[labelIndex] == 1:
-                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":gold[i], "predicted":int(pred[i]), "cafa_ids":",".join(data["cafa_ids"][i])}
+                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":gold[i], "predicted":int(pred[i]), "cafa_ids":cafa_ids}
                 row["match"] = getMatch(gold[i], pred[i])
+                row["confidence"] = data["probabilities"][i][labelIndex] if hasProbabilities else None
                 rows.append(row)
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "label", "gold", "predicted", "match", "cafa_ids"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
         dw.writeheader()
         dw.writerows(rows)
 
@@ -370,7 +376,7 @@ def importNamed(name):
 def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     print "Evaluating the predictions"
     results = {}
-    # Get the average result
+    print "Calculating average scores"
     results["average"] = {"id":"average", "ns":None, "name":None, "auc":0, "tp":None, "fp":None, "fn":None, "tn":None}
     try:
         results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
@@ -379,7 +385,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results["average"]["fscore"] = f1_score(labels, predicted, average="micro")
     results["average"]["precision"] = precision_score(labels, predicted, average="micro")
     results["average"]["recall"] = recall_score(labels, predicted, average="micro")
-    # Get results per label
+    print "Calculating label scores"
     try:
         aucs = roc_auc_score(labels, predicted, average=None)
     except ValueError as e:
@@ -400,7 +406,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
             term = terms[label_name]
             result["ns"] = term["ns"]
             result["name"] = term["name"]
-    # Calculate instances
+    print "Counting label instances"
     stats = {x:{"tp":0, "fp":0, "fn":0, "tn":0} for x in label_names}
     label_indices = range(len(label_names))
     for gold, pred in zip(labels, predicted):
@@ -429,16 +435,21 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     trainLabels = examples["labels"][trainIndices]
     testLabels = examples["labels"][testIndices]
     testIds = [examples["ids"][i] for i in range(len(sets)) if any(x in testSets for x in sets[i])]
+    testCafaIds = [examples["cafa_ids"][i] for i in range(len(sets)) if any(x in testSets for x in sets[i])]
     print "Training, train / test = ", trainFeatures.shape[0], "/", testFeatures.shape[0]
     cls.fit(trainFeatures, trainLabels)
     print "Predicting"
     predicted = cls.predict(testFeatures)
+    probabilities = None
+    if hasattr(cls, "predict_proba"):
+        print "Predicting probabilities"
+        probabilities = cls.predict_proba(testFeatures)
     results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms)
     print "Average:", metricsToString(results["average"])
     print getResultsString(results, 20, ["average"])
     #if predictionsPath != None:
     #    predictionsPath(testIds, testLabels, predicted, examples["label_names"], predictionsPath)
-    data = {"results":results, "args":args, "predicted":predicted, "gold":testLabels, "ids":testIds}
+    data = {"results":results, "args":args, "predicted":predicted, "gold":testLabels, "ids":testIds, "cafa_ids":testCafaIds, "probabilities":probabilities}
     if hasattr(cls, "feature_importances_"):
         data["feature_importances"] = cls.feature_importances_        
     return data
@@ -463,7 +474,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
     Cls = importNamed(classifier)
     #grid = parseOptions(classifierArgs)
     for args in ParameterGrid(classifierArgs):
-        cls, data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
+        data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
 #         print "Learning with args", args
 #         cls = Cls(**args)
 #         if useMultiOutputClassifier:
@@ -488,15 +499,18 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
 #     testResultPath = os.path.join(outDir, "test-predictions.tsv")
     print "Best classifier arguments:", best["args"]
     print "Best development set results:", metricsToString(best["results"]["average"])
-    saveResults(best, "devel", examples["label_names"])
+    if outDir != None:
+        saveResults(best, os.path.join(outDir, "devel"), examples["label_names"])
     if useTestSet:
         print "Classifying the test set"
         data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
-        saveResults(data, "test", examples["label_names"])
+        if outDir != None:
+            saveResults(data, os.path.join(outDir, "test"), examples["label_names"])
     if useCAFASet:
         print "Classifying the CAFA targets"
         data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
-        saveResults(data, "test", examples["label_names"])
+        if outDir != None:
+            saveResults(data, os.path.join(outDir, "cafa"), examples["label_names"])
 #     if outDir != None:
 #         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
 #         savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
@@ -598,7 +612,6 @@ if __name__=="__main__":
     
     if options.actions != None:
         options.actions = options.actions.split(",")
-    options.features = options.features.split(",")
     options.args = eval(options.args)
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))

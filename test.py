@@ -199,6 +199,18 @@ def vectorizeExamples(examples, featureGroups):
 #     print "Divided sets", [(x, len(datasets[x])) for x in sorted(datasets.keys())]
 #     return datasets
 
+def getFeatureGroups(groups=None):
+    if groups == None:
+        groups = ["all"]
+    if "all" in groups:
+        groups.remove("all")
+        groups += ["taxonomy", "blast", "delta", "interpro", "predgpi", "nucpred"]
+    removed = [x for x in groups if x.startswith("-")]
+    groups = set([x for x in groups if not x.startswith("-")])
+    for group in removed:
+        groups.remove(group.strip("-"))
+    return list(groups)
+
 def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
     examples = {"labels":[], "features":[], "ids":[], "sets":[], "label_names":[], "label_size":{}}
@@ -224,6 +236,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["ids"].append(protein["id"])
         examples["sets"].append(protein["sets"])
     # Build features
+    featureGroups = getFeatureGroups(featureGroups)
     print "Building features, feature groups = ", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
         builder = TaxonomyFeatureBuilder([os.path.join(dataPath, "Taxonomy")])

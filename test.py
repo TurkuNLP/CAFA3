@@ -303,14 +303,15 @@ def getResultsString(results, maxNumber=None, skipIds=None):
             break
     return s
 
-def saveResults(results, outPath):
-    print "Writing results to", outPath
-    with open(outPath, "wt") as f:
+def saveResults(data, outStem, label_names):
+    print "Writing results to", outStem + "-results.tsv"
+    with open(outStem + "-results.tsv", "wt") as f:
         dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "tp", "fp", "tn", "fn", "id", "label_size", "ns", "name"], delimiter='\t')
         dw.writeheader()
-        dw.writerow(results["average"])
-        results = [x for x in results.values() if x["id"] != "average"]
+        dw.writerow(data["results"]["average"])
+        results = [x for x in data["results"].values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
+    savePredictions(data["ids"], data["labels"], data["predicted"], label_names, outStem + "-predictions.tsv")
 
 def getMatch(gold, predicted):
     if gold == predicted:
@@ -410,7 +411,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)
 
-def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms):
+def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms, predictionsPath=None):
     print "Learning with args", args
     cls = Cls(**args)
     if useMultiOutputClassifier:
@@ -424,6 +425,7 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     testFeatures = examples["features"][testIndices]
     trainLabels = examples["labels"][trainIndices]
     testLabels = examples["labels"][testIndices]
+    testIds = [examples["ids"][i] for i in range(len(sets)) if any(x in testSets for x in sets[i])]
     print "Training, train / test = ", trainFeatures.shape[0], "/", testFeatures.shape[0]
     cls.fit(trainFeatures, trainLabels)
     print "Predicting"
@@ -431,7 +433,12 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms)
     print "Average:", metricsToString(results["average"])
     print getResultsString(results, 20, ["average"])
-    return cls, predicted, results
+    if predictionsPath != None:
+        predictionsPath(testIds, testLabels, predicted, examples["label_names"], predictionsPath)
+    data = {"results":results, "args":args, "predicted":predicted, "gold":testLabels, "ids":testIds}
+    if hasattr(cls, "feature_importances_"):
+        data["feature_importances"] = cls.feature_importances_        
+    return cls, data
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, useTestSet=False, useCAFASet=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
@@ -453,7 +460,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
     Cls = importNamed(classifier)
     #grid = parseOptions(classifierArgs)
     for args in ParameterGrid(classifierArgs):
-        cls, predicted, results = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
+        cls, data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
 #         print "Learning with args", args
 #         cls = Cls(**args)
 #         if useMultiOutputClassifier:
@@ -468,16 +475,25 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
 #         results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
 #         print "Average:", metricsToString(results["average"])
 #         print getResultsString(results, 20, ["average"])
-        if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
-            best = {"results":results, "args":args, "predicted":predicted, "gold":develLabels}
-            if hasattr(cls, "feature_importances_"):
-                best["feature_importances"] = cls.feature_importances_
+        if best == None or data["results"]["average"]["auc"] > data["results"]["average"]["auc"]:
+            best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
+            #if hasattr(cls, "feature_importances_"):
+            #    best["feature_importances"] = cls.feature_importances_
         print time.strftime('%X %x %Z')
+    develResultPath = os.path.join(outDir, "test-predictions.tsv")
+    testResultPath = os.path.join(outDir, "test-predictions.tsv")
+    testResultPath = os.path.join(outDir, "test-predictions.tsv")
     print "Best classifier arguments:", best["args"]
     print "Best development set results:", metricsToString(best["results"]["average"])
+    saveResults(best, "devel", examples["label_names"])
     if useTestSet:
-        print "Training test set classifier with args", best["args"]
-        cls = Cls(**best["args"])
+        print "Classifying the test set"
+        cls, data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms, os.path.join(outDir, "test-predictions.tsv"))
+        saveResults(data, "test", examples["label_names"])
+    if useCAFASet:
+        print "Classifying the CAFA targets"
+        cls, data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms, os.path.join(outDir, "cafa-predictions.tsv"))
+        saveResults(data, "test", examples["label_names"])
     if outDir != None:
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
         savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))

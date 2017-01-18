@@ -316,9 +316,9 @@ def saveResults(data, outStem, label_names):
     savePredictions(data, label_names, outStem + "-predictions.tsv")
     print "Writing ids to", outStem + "-ids.tsv"
     with open(outStem + "-ids.tsv", "wt") as f:
-        dw = csv.DictWriter(f, ["id", "cafa_ids", "labels"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "cafa_ids", "gold", "predicted"], delimiter='\t')
         dw.writeheader()
-        dw.writerows([{"id":protId, "cafa_ids":",".join(cafa_ids), "labels":gold.count_nonzero()} for protId, cafa_ids, gold in zip(data["ids"], data["cafa_ids"], zip["gold"])]) 
+        dw.writerows([{"id":protId, "cafa_ids":",".join(cafa_ids), "gold":np.count_nonzero(gold), "predicted":np.count_nonzero(pred)} for protId, cafa_ids, gold, pred in zip(data["ids"], data["cafa_ids"], data["gold"], data["predicted"])]) 
 
 def getMatch(gold, predicted):
     if gold == predicted:

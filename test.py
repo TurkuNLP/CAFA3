@@ -410,52 +410,64 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)
 
-def learn(Cls, args, trainFeatures, trainLabels, testFeatures, testLabels, useMultiOutputClassifier):
+def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms):
     print "Learning with args", args
     cls = Cls(**args)
     if useMultiOutputClassifier:
+        print "Using MultiOutputClassifier"
         cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
+    print "Train / test = ", trainSets, "/", testSets
+    sets = examples["sets"]
+    trainIndices = [i for i in range(len(sets)) if any(x in trainSets for x in sets[i])]
+    testIndices = [i for i in range(len(sets)) if any(x in testSets for x in sets[i])]
+    trainFeatures = examples["features"][trainIndices]
+    testFeatures = examples["features"][testIndices]
+    trainLabels = examples["labels"][trainIndices]
+    testLabels = examples["labels"][testIndices]
+    print "Training, train / test = ", trainFeatures.shape[0], "/", testFeatures.shape[0]
     cls.fit(trainFeatures, trainLabels)
     print "Predicting"
     predicted = cls.predict(testFeatures)
-    results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
+    results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms)
     print "Average:", metricsToString(results["average"])
     print getResultsString(results, 20, ["average"])
+    return cls, predicted, results
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, useTestSet=False, useCAFASet=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
-    sets = examples["sets"]
-    trainIndices = [i for i in range(len(sets)) if "train" in sets[i]]
-    develIndices = [i for i in range(len(sets)) if "devel" in sets[i]]
-    trainFeatures = examples["features"][trainIndices]
-    develFeatures = examples["features"][develIndices]
-    trainLabels = examples["labels"][trainIndices]
-    develLabels = examples["labels"][develIndices]
-    develIds = [examples["ids"][i] for i in range(len(sets)) if "devel" in sets[i]]
-    print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
-    if useMultiOutputClassifier:
-        print "Using MultiOutputClassifier"
+#     sets = examples["sets"]
+#     trainIndices = [i for i in range(len(sets)) if "train" in sets[i]]
+#     develIndices = [i for i in range(len(sets)) if "devel" in sets[i]]
+#     trainFeatures = examples["features"][trainIndices]
+#     develFeatures = examples["features"][develIndices]
+#     trainLabels = examples["labels"][trainIndices]
+#     develLabels = examples["labels"][develIndices]
+#     develIds = [examples["ids"][i] for i in range(len(sets)) if "devel" in sets[i]]
+#     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
+#     if useMultiOutputClassifier:
+#         print "Using MultiOutputClassifier"
     best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     Cls = importNamed(classifier)
     #grid = parseOptions(classifierArgs)
     for args in ParameterGrid(classifierArgs):
-        print "Learning with args", args
-        cls = Cls(**args)
-        if useMultiOutputClassifier:
-            cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
-        cls.fit(trainFeatures, trainLabels)
-        print "Predicting the devel set"
-        predicted = cls.predict(develFeatures)
-        #score = roc_auc_score(develLabels, predicted, average="micro")
-        #scores = roc_auc_score(develLabels, predicted, average=None)
-        #print "Average =", score
-        #results = getResults(examples, scores, terms)
-        results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
-        print "Average:", metricsToString(results["average"])
-        print getResultsString(results, 20, ["average"])
+        cls, predicted, results = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
+#         print "Learning with args", args
+#         cls = Cls(**args)
+#         if useMultiOutputClassifier:
+#             cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
+#         cls.fit(trainFeatures, trainLabels)
+#         print "Predicting the devel set"
+#         predicted = cls.predict(develFeatures)
+#         #score = roc_auc_score(develLabels, predicted, average="micro")
+#         #scores = roc_auc_score(develLabels, predicted, average=None)
+#         #print "Average =", score
+#         #results = getResults(examples, scores, terms)
+#         results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
+#         print "Average:", metricsToString(results["average"])
+#         print getResultsString(results, 20, ["average"])
         if best == None or results["average"]["auc"] > best["results"]["average"]["auc"]:
             best = {"results":results, "args":args, "predicted":predicted, "gold":develLabels}
             if hasattr(cls, "feature_importances_"):

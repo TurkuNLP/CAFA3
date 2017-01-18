@@ -22,6 +22,7 @@ from sklearn.feature_selection.variance_threshold import VarianceThreshold
 from sklearn.multioutput import MultiOutputClassifier, _fit_estimator
 from sklearn.utils.validation import check_X_y, has_fit_parameter
 from sklearn.externals.joblib.parallel import Parallel, delayed
+import numpy as np
 try:
     import ujson as json
 except ImportError:
@@ -325,20 +326,39 @@ def savePredictions(data, label_names, outPath):
     keys = ["ids", "gold", "predicted", "cafa_ids"]
     hasProbabilities = data.get("probabilities") != None
     if hasProbabilities:
-        keys += ["probabilities"]
+        lengths = [len(data["probabilities"]), len(label_names)]
+        assert len(set(lengths)) == 1, lengths #keys += ["probabilities"]
     lengths = [len(data[x]) for x in keys]
     assert len(set(lengths)) == 1, lengths
     label_indices = range(len(label_names))
     rows = []
+    
+#     n_samples = data["probabilities"][0].shape[0]
+#     label_names_array = np.array(label_names)
+#     n_outputs = len(label_names_array)
+#     predictions = np.zeros((n_samples, n_outputs))
+#     for k in range(n_outputs):
+#         predictions[:, k] = label_names_array[k].take(np.argmax(data["probabilities"][k], axis=1), axis=0)
+    
     for i in range(len(data["ids"])):
         gold = data["gold"][i]
         pred = data["predicted"][i]
         cafa_ids = ",".join(data["cafa_ids"][i])
         for labelIndex in label_indices:
-            if gold[labelIndex] == 1 or pred[labelIndex] == 1:
-                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":gold[i], "predicted":int(pred[i]), "cafa_ids":cafa_ids}
-                row["match"] = getMatch(gold[i], pred[i])
-                row["confidence"] = data["probabilities"][i][labelIndex] if hasProbabilities else None
+            goldValue = gold[labelIndex]
+            predValue = int(pred[labelIndex])
+            if goldValue == 1 or predValue == 1:
+                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
+                row["match"] = getMatch(goldValue, predValue)
+                confidence = None
+                if hasProbabilities:
+                    confidence = data["probabilities"][labelIndex][i]
+                    if confidence.shape[0] > 1:
+                        confidence = confidence[1]
+                    else:
+                        confidence = confidence[0]
+                row["confidence"] = confidence #data["probabilities"][labelIndex][i] if hasProbabilities else None
+                #row["pred2"] = predictions[i][labelIndex]
                 rows.append(row)
     with open(outPath, "wt") as f:
         dw = csv.DictWriter(f, ["id", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')

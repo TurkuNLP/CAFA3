@@ -350,14 +350,7 @@ def savePredictions(data, label_names, outPath):
             if goldValue == 1 or predValue == 1:
                 row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
                 row["match"] = getMatch(goldValue, predValue)
-                confidence = None
-                if hasProbabilities:
-                    confidence = data["probabilities"][labelIndex][i]
-                    if confidence.shape[0] > 1:
-                        confidence = confidence[1]
-                    else:
-                        confidence = confidence[0]
-                row["confidence"] = confidence #data["probabilities"][labelIndex][i] if hasProbabilities else None
+                row["confidence"] = max(data["probabilities"][labelIndex][i]) if hasProbabilities else None #data["probabilities"][labelIndex][i] if hasProbabilities else None
                 #row["pred2"] = predictions[i][labelIndex]
                 rows.append(row)
     with open(outPath, "wt") as f:

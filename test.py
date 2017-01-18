@@ -214,7 +214,7 @@ def getFeatureGroups(groups=None):
 
 def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
-    examples = {"labels":[], "features":[], "ids":[], "sets":[], "label_names":[], "label_size":{}}
+    examples = {"labels":[], "features":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     if limit:
         protIds = protIds[0:limit]
@@ -235,6 +235,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
             examples["label_size"][label] += 1
         examples["labels"].append(labels)
         examples["ids"].append(protein["id"])
+        examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
@@ -319,20 +320,22 @@ def getMatch(gold, predicted):
     else:
         return "fn" if (gold == 1) else "fp"
 
-def savePredictions(exampleIds, labels, predicted, label_names, outPath):
+def savePredictions(data, label_names, cafa_ids, outPath):
     print "Writing predictions to", outPath
-    lengths = [len(x) for x in (exampleIds, labels, predicted)]
+    lengths = [len(data[x]) for x in ("ids", "labels", "predicted", "cafa_ids")]
     assert len(set(lengths)) == 1, lengths
     label_indices = range(len(label_names))
     rows = []
-    for exampleId, gold, pred in zip(exampleIds, labels, predicted):
-        for i in label_indices:
-            if gold[i] == 1 or pred[i] == 1:
-                row = {"id":exampleId, "label":label_names[i], "gold":gold[i], "predicted":int(pred[i])}
+    for i in range(len(data["ids"])):
+        gold = data["labels"][i]
+        pred = data["predicted"][i]
+        for labelIndex in label_indices:
+            if gold[labelIndex] == 1 or pred[labelIndex] == 1:
+                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":gold[i], "predicted":int(pred[i]), "cafa_ids":",".join(data["cafa_ids"][i])}
                 row["match"] = getMatch(gold[i], pred[i])
                 rows.append(row)
     with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "label", "gold", "predicted", "match"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "label", "gold", "predicted", "match", "cafa_ids"], delimiter='\t')
         dw.writeheader()
         dw.writerows(rows)
 
@@ -411,7 +414,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)
 
-def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms, predictionsPath=None):
+def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms):
     print "Learning with args", args
     cls = Cls(**args)
     if useMultiOutputClassifier:
@@ -433,12 +436,12 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms)
     print "Average:", metricsToString(results["average"])
     print getResultsString(results, 20, ["average"])
-    if predictionsPath != None:
-        predictionsPath(testIds, testLabels, predicted, examples["label_names"], predictionsPath)
+    #if predictionsPath != None:
+    #    predictionsPath(testIds, testLabels, predicted, examples["label_names"], predictionsPath)
     data = {"results":results, "args":args, "predicted":predicted, "gold":testLabels, "ids":testIds}
     if hasattr(cls, "feature_importances_"):
         data["feature_importances"] = cls.feature_importances_        
-    return cls, data
+    return data
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, useTestSet=False, useCAFASet=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
@@ -480,24 +483,24 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
             #if hasattr(cls, "feature_importances_"):
             #    best["feature_importances"] = cls.feature_importances_
         print time.strftime('%X %x %Z')
-    develResultPath = os.path.join(outDir, "test-predictions.tsv")
-    testResultPath = os.path.join(outDir, "test-predictions.tsv")
-    testResultPath = os.path.join(outDir, "test-predictions.tsv")
+#     develResultPath = os.path.join(outDir, "test-predictions.tsv")
+#     testResultPath = os.path.join(outDir, "test-predictions.tsv")
+#     testResultPath = os.path.join(outDir, "test-predictions.tsv")
     print "Best classifier arguments:", best["args"]
     print "Best development set results:", metricsToString(best["results"]["average"])
     saveResults(best, "devel", examples["label_names"])
     if useTestSet:
         print "Classifying the test set"
-        cls, data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms, os.path.join(outDir, "test-predictions.tsv"))
+        data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
         saveResults(data, "test", examples["label_names"])
     if useCAFASet:
         print "Classifying the CAFA targets"
-        cls, data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms, os.path.join(outDir, "cafa-predictions.tsv"))
+        data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
         saveResults(data, "test", examples["label_names"])
-    if outDir != None:
-        saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
-        savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
-    return best
+#     if outDir != None:
+#         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
+#         savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
+#    return best
     #clf = GridSearchCV(RandomForestClassifier(), args, verbose=verbose, n_jobs=cvJobs, scoring=scoring)
     #clf.fit(X, y)
     #print "Best params", (clf.best_params_, clf.best_score_)
@@ -513,7 +516,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useOneVsRest=False, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip"):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useMultiOutputClassifier=False, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip"):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -563,7 +566,9 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "==========", "Training Classifier", "=========="
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
-        best = optimize(classifier, classifierArgs, examples, terms=terms, useOneVsRest=useOneVsRest, outDir=outDir)
+        optimize(classifier, classifierArgs, examples, terms=terms, 
+                 useMultiOutputClassifier=useMultiOutputClassifier, outDir=outDir,
+                 useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
     if actions == None or "statistics" in actions:
         print "==========", "Calculating Statistics", "=========="
         statistics.makeStatistics(examples, outDir)
@@ -579,13 +584,13 @@ if __name__=="__main__":
     optparser = OptionParser(description="")
     optparser.add_option("-a", "--actions", default=None, help="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
-    optparser.add_option("-f", "--features", default="blast", help="")
+    optparser.add_option("-f", "--features", default="all", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("-t", "--terms", default=100, type=int, help="")
     optparser.add_option("-o", "--output", default=None, help="")
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
-    optparser.add_option('-r','--args', help='', default="{'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
-    optparser.add_option("--onevsrest", default=False, action="store_true", help="")
+    optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
+    optparser.add_option("--multioutputclassifier", default=False, action="store_true", help="")
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     optparser.add_option("--targets", default="skip", help="skip, overlap or separate")
@@ -593,10 +598,11 @@ if __name__=="__main__":
     
     if options.actions != None:
         options.actions = options.actions.split(",")
+    options.features = options.features.split(",")
     options.args = eval(options.args)
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
-        useOneVsRest=options.onevsrest, cafaTargets=options.targets)
+        useMultiOutputClassifier=options.multioutputclassifier, cafaTargets=options.targets)

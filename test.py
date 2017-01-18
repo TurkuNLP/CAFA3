@@ -202,14 +202,15 @@ def vectorizeExamples(examples, featureGroups):
 def getFeatureGroups(groups=None):
     if groups == None:
         groups = ["all"]
+    groups = list(set(groups))
     if "all" in groups:
         groups.remove("all")
-        groups += ["taxonomy", "blast", "delta", "interpro", "predgpi", "nucpred"]
+        groups += set(["taxonomy", "blast", "delta", "interpro", "predgpi", "nucpred"])
     removed = [x for x in groups if x.startswith("-")]
-    groups = set([x for x in groups if not x.startswith("-")])
+    groups = [x for x in groups if not x.startswith("-")]
     for group in removed:
         groups.remove(group.strip("-"))
-    return list(groups)
+    return groups
 
 def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
     print "Building examples"
@@ -409,7 +410,19 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)
 
-def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneVsRest=False, outDir=None):
+def learn(Cls, args, trainFeatures, trainLabels, testFeatures, testLabels, useMultiOutputClassifier):
+    print "Learning with args", args
+    cls = Cls(**args)
+    if useMultiOutputClassifier:
+        cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
+    cls.fit(trainFeatures, trainLabels)
+    print "Predicting"
+    predicted = cls.predict(testFeatures)
+    results = evaluate(develLabels, predicted, examples["label_names"], examples["label_size"], terms)
+    print "Average:", metricsToString(results["average"])
+    print getResultsString(results, 20, ["average"])
+
+def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, useTestSet=False, useCAFASet=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -422,8 +435,8 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
     develLabels = examples["labels"][develIndices]
     develIds = [examples["ids"][i] for i in range(len(sets)) if "devel" in sets[i]]
     print "Optimizing, train / devel = ", trainFeatures.shape[0], "/", develFeatures.shape[0]
-    if useOneVsRest:
-        print "Using OneVsRestClassifier"
+    if useMultiOutputClassifier:
+        print "Using MultiOutputClassifier"
     best = None
     print "Parameter grid search", time.strftime('%X %x %Z')
     Cls = importNamed(classifier)
@@ -431,7 +444,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
     for args in ParameterGrid(classifierArgs):
         print "Learning with args", args
         cls = Cls(**args)
-        if useOneVsRest:
+        if useMultiOutputClassifier:
             cls = MyMultiOutputClassifier(cls) # OneVsRestClassifier(cls)
         cls.fit(trainFeatures, trainLabels)
         print "Predicting the devel set"
@@ -448,6 +461,11 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useOneV
             if hasattr(cls, "feature_importances_"):
                 best["feature_importances"] = cls.feature_importances_
         print time.strftime('%X %x %Z')
+    print "Best classifier arguments:", best["args"]
+    print "Best development set results:", metricsToString(best["results"]["average"])
+    if useTestSet:
+        print "Training test set classifier with args", best["args"]
+        cls = Cls(**best["args"])
     if outDir != None:
         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
         savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))

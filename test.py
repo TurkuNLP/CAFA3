@@ -577,13 +577,13 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             print "Loading CAFA3 targets"
             loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
-        termCounts = loadAnnotations(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_propagated.tsv.gz"), proteins)
+        termCounts = loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
         print "Using", len(topTerms), "most common GO terms"
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
-        loadSplit(os.path.join(options.dataPath, "Swiss_Prot"), proteins)
+        loadSplit(os.path.join(options.dataPath, "data"), proteins)
         defineSets(proteins, cafaTargets)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
@@ -619,7 +619,7 @@ if __name__=="__main__":
     from optparse import OptionParser
     optparser = OptionParser(description="")
     optparser.add_option("-a", "--actions", default=None, help="")
-    optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3"), help="")
+    optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
     optparser.add_option("-f", "--features", default="all", help="")
     optparser.add_option("-l", "--limit", default=None, type=int, help="")
     optparser.add_option("-t", "--terms", default=100, type=int, help="")

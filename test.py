@@ -489,6 +489,7 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     return cls, data
 
 def warmStartGrid(Cls, classifierArgs, examples, terms):
+    print "Using warm start parameter grid search"
     for key in classifierArgs:
         if key != "n_estimators" and len(classifierArgs[key]) > 1:
             raise Exception("Multiple classifier argument values defined for argument '" + str(key) + "'")

@@ -348,7 +348,7 @@ def savePredictions(data, label_names, outPath):
 #         predictions[:, k] = label_names_array[k].take(np.argmax(data["probabilities"][k], axis=1), axis=0)
     
     with gzip.open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "label_index", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
         dw.writeheader()
         rows = []
         for i in range(len(data["ids"])):
@@ -359,7 +359,7 @@ def savePredictions(data, label_names, outPath):
                 goldValue = gold[labelIndex]
                 predValue = int(pred[labelIndex])
                 #if goldValue == 1 or predValue == 1:
-                row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
+                row = {"id":data["ids"][i], "label_index":labelIndex, "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
                 row["match"] = getMatch(goldValue, predValue)
                 row["confidence"] = max(data["probabilities"][labelIndex][i]) if hasProbabilities else None #data["probabilities"][labelIndex][i] if hasProbabilities else None
                 #row["pred2"] = predictions[i][labelIndex]

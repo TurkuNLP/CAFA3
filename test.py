@@ -313,7 +313,7 @@ def saveResults(data, outStem, label_names):
         dw.writerow(data["results"]["average"])
         results = [x for x in data["results"].values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
-    savePredictions(data, label_names, outStem + "-predictions.tsv")
+    savePredictions(data, label_names, outStem + "-predictions.tsv.gz")
     print "Writing ids to", outStem + "-ids.tsv"
     with open(outStem + "-ids.tsv", "wt") as f:
         dw = csv.DictWriter(f, ["id", "cafa_ids", "gold", "predicted"], delimiter='\t')
@@ -336,7 +336,6 @@ def savePredictions(data, label_names, outPath):
     lengths = [len(data[x]) for x in keys]
     assert len(set(lengths)) == 1, lengths
     label_indices = range(len(label_names))
-    rows = []
     
 #     n_samples = data["probabilities"][0].shape[0]
 #     label_names_array = np.array(label_names)
@@ -345,23 +344,28 @@ def savePredictions(data, label_names, outPath):
 #     for k in range(n_outputs):
 #         predictions[:, k] = label_names_array[k].take(np.argmax(data["probabilities"][k], axis=1), axis=0)
     
-    for i in range(len(data["ids"])):
-        gold = data["gold"][i]
-        pred = data["predicted"][i]
-        cafa_ids = ",".join(data["cafa_ids"][i])
-        for labelIndex in label_indices:
-            goldValue = gold[labelIndex]
-            predValue = int(pred[labelIndex])
-            if goldValue == 1 or predValue == 1:
+    with gzip.open(outPath, "wt") as f:
+        dw = csv.DictWriter(f, ["id", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
+        dw.writeheader()
+        rows = []
+        for i in range(len(data["ids"])):
+            gold = data["gold"][i]
+            pred = data["predicted"][i]
+            cafa_ids = ",".join(data["cafa_ids"][i])
+            for labelIndex in label_indices:
+                goldValue = gold[labelIndex]
+                predValue = int(pred[labelIndex])
+                #if goldValue == 1 or predValue == 1:
                 row = {"id":data["ids"][i], "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
                 row["match"] = getMatch(goldValue, predValue)
                 row["confidence"] = max(data["probabilities"][labelIndex][i]) if hasProbabilities else None #data["probabilities"][labelIndex][i] if hasProbabilities else None
                 #row["pred2"] = predictions[i][labelIndex]
                 rows.append(row)
-    with open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
-        dw.writeheader()
-        dw.writerows(rows)
+            if len(rows) >= 100000:
+                dw.writerows(rows)
+                rows = []
+        if len(rows) >= 0:
+            dw.writerows(rows)
 
 def importNamed(name):
     asName = name.rsplit(".", 1)[-1]

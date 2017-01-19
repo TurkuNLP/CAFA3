@@ -401,7 +401,7 @@ def importNamed(name):
 #     print "Parsing options string:", string
 #     return eval(string)
 
-def evaluate(labels, predicted, label_names, label_size=None, terms=None):
+def evaluate(labels, predicted, label_names, label_size=None, terms=None, averageOnly=False):
     print "Evaluating the predictions"
     results = {}
     print "Calculating average scores"
@@ -413,6 +413,8 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
     results["average"]["fscore"] = f1_score(labels, predicted, average="micro")
     results["average"]["precision"] = precision_score(labels, predicted, average="micro")
     results["average"]["recall"] = recall_score(labels, predicted, average="micro")
+    if averageOnly:
+        return results
     print "Calculating label scores"
     try:
         aucs = roc_auc_score(labels, predicted, average=None)
@@ -448,7 +450,7 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)
 
-def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms, cls=None, verbose=True):
+def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms, cls=None, averageOnly=False):
     args = args.copy()
     print "Learning with args", args
     if cls == None:
@@ -477,9 +479,9 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
     if hasattr(cls, "predict_proba"):
         print "Predicting probabilities"
         probabilities = cls.predict_proba(testFeatures)
-    results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms)
+    results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms, averageOnly=averageOnly)
     print "Average:", metricsToString(results["average"])
-    if verbose:
+    if not averageOnly:
         print getResultsString(results, 20, ["average"])
     #if predictionsPath != None:
     #    predictionsPath(testIds, testLabels, predicted, examples["label_names"], predictionsPath)
@@ -505,7 +507,7 @@ def warmStartGrid(Cls, classifierArgs, examples, terms):
             args["n_estimators"] = n
             cls.n_estimators = n
             print "cls.n_estimators = ", cls.n_estimators
-        cls, data = learn(Cls, args, examples, ["train"], ["devel"], False, terms, cls=cls, verbose=False)
+        cls, data = learn(Cls, args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
         performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
         performances[-1]["n"] = n
         if best == None or data["results"]["average"]["auc"] > best["results"]["average"]["auc"]:
@@ -515,6 +517,8 @@ def warmStartGrid(Cls, classifierArgs, examples, terms):
     print "Warm start parameter grid search complete"
     for performance in performances:
         print performance["n"], "\t", metricsToString(performance)
+    print "Full evaluation for the best results"
+    data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms)
     return best
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):

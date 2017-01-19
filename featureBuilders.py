@@ -23,6 +23,8 @@ class FeatureBuilder:
             if not os.path.exists(inPath):
                 raise Exception("Cannot find path " + str(inPath))
             for filename in sorted(os.listdir(inPath)):
+                if filename.endswith("~"):
+                    continue
                 for pattern in patterns:
                     if pattern.match(filename) != None:
                         matching.append(os.path.join(inPath, filename))

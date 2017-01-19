@@ -518,7 +518,7 @@ def warmStartGrid(Cls, classifierArgs, examples, terms):
     for performance in performances:
         print performance["n"], "\t", metricsToString(performance)
     print "Full evaluation for the best results"
-    data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms)
+    best["results"] = evaluate(best["gold"], best["predicted"], examples["label_names"], examples["label_size"], terms)
     return best
 
 def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):

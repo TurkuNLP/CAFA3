@@ -151,7 +151,7 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
     
     def setRow(self, features, row, filePath):
         # Choose the primary identifier for the feature
-        for idType in ("GOid", "ac", "ax", "db"):
+        for idType in ("GOid", "ac", "db"):
             if idType in row:
                 break
         # Choose the numeric value to use for the feature

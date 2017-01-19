@@ -311,7 +311,7 @@ def getResultsString(results, maxNumber=None, skipIds=None):
             break
     return s
 
-def saveResults(data, outStem, label_names):
+def saveResults(data, outStem, label_names, negatives=False):
     print "Writing results to", outStem + "-results.tsv"
     with open(outStem + "-results.tsv", "wt") as f:
         dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "tp", "fp", "tn", "fn", "id", "label_size", "ns", "name"], delimiter='\t')
@@ -319,7 +319,7 @@ def saveResults(data, outStem, label_names):
         dw.writerow(data["results"]["average"])
         results = [x for x in data["results"].values() if x["id"] != "average"]
         dw.writerows(sorted(results, key=lambda x: x["auc"], reverse=True))
-    savePredictions(data, label_names, outStem + "-predictions.tsv.gz")
+    savePredictions(data, label_names, outStem + "-predictions.tsv.gz", negatives=negatives)
     print "Writing ids to", outStem + "-ids.tsv"
     with open(outStem + "-ids.tsv", "wt") as f:
         dw = csv.DictWriter(f, ["id", "cafa_ids", "gold", "predicted"], delimiter='\t')
@@ -332,7 +332,7 @@ def getMatch(gold, predicted):
     else:
         return "fn" if (gold == 1) else "fp"
 
-def savePredictions(data, label_names, outPath):
+def savePredictions(data, label_names, outPath, negatives=False):
     print "Writing predictions to", outPath
     keys = ["ids", "gold", "predicted", "cafa_ids"]
     hasProbabilities = data.get("probabilities") != None
@@ -361,12 +361,12 @@ def savePredictions(data, label_names, outPath):
             for labelIndex in label_indices:
                 goldValue = gold[labelIndex]
                 predValue = int(pred[labelIndex])
-                #if goldValue == 1 or predValue == 1:
-                row = {"id":data["ids"][i], "label_index":labelIndex, "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
-                row["match"] = getMatch(goldValue, predValue)
-                row["confidence"] = max(data["probabilities"][labelIndex][i]) if hasProbabilities else None #data["probabilities"][labelIndex][i] if hasProbabilities else None
-                #row["pred2"] = predictions[i][labelIndex]
-                rows.append(row)
+                if negatives or (goldValue == 1 or predValue == 1):
+                    row = {"id":data["ids"][i], "label_index":labelIndex, "label":label_names[labelIndex], "gold":goldValue, "predicted":predValue, "cafa_ids":cafa_ids}
+                    row["match"] = getMatch(goldValue, predValue)
+                    row["confidence"] = max(data["probabilities"][labelIndex][i]) if hasProbabilities else None #data["probabilities"][labelIndex][i] if hasProbabilities else None
+                    #row["pred2"] = predictions[i][labelIndex]
+                    rows.append(row)
             if len(rows) >= 100000:
                 dw.writerows(rows)
                 rows = []
@@ -482,7 +482,7 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
         data["feature_importances"] = cls.feature_importances_        
     return data
 
-def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, useTestSet=False, useCAFASet=False):
+def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
     #grid = ParameterGrid({"n_estimators":[10], "n_jobs":[n_jobs], "verbose":[verbose]}) #{"n_estimators":[1,2,10,50,100]}
     #XTrainAndDevel, XTest, yTrainAndDevel, yTest = train_test_split(X, y, test_size=0.2, random_state=0)
     #XTrain, XDevel, yTrain, yDevel = train_test_split(XTrainAndDevel, yTrainAndDevel, test_size=0.2, random_state=0)
@@ -528,17 +528,17 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
     print "Best classifier arguments:", best["args"]
     print "Best development set results:", metricsToString(best["results"]["average"])
     if outDir != None:
-        saveResults(best, os.path.join(outDir, "devel"), examples["label_names"])
+        saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
     if useTestSet:
         print "Classifying the test set"
         data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
         if outDir != None:
-            saveResults(data, os.path.join(outDir, "test"), examples["label_names"])
+            saveResults(data, os.path.join(outDir, "test"), examples["label_names"], negatives=negatives)
     if useCAFASet:
         print "Classifying the CAFA targets"
         data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
         if outDir != None:
-            saveResults(data, os.path.join(outDir, "cafa"), examples["label_names"])
+            saveResults(data, os.path.join(outDir, "cafa"), examples["label_names"], negatives=negatives)
 #     if outDir != None:
 #         saveResults(best["results"], os.path.join(outDir, "devel-results.tsv"))
 #         savePredictions(develIds, develLabels, best["predicted"], examples["label_names"], os.path.join(outDir, "devel-predictions.tsv"))
@@ -558,7 +558,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
 #         testLabels, testFeatures = buildExamples(test, limit, limitTerms, featureGroups)
 #     optimize(trainFeatures, develFeatures, trainLabels, develLabels, verbose=3, n_jobs = -1, scoring = "f1_micro", cvJobs=1)
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useMultiOutputClassifier=False, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip"):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, useMultiOutputClassifier=False, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", negatives=False):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -609,7 +609,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
         optimize(classifier, classifierArgs, examples, terms=terms, 
-                 useMultiOutputClassifier=useMultiOutputClassifier, outDir=outDir,
+                 useMultiOutputClassifier=useMultiOutputClassifier, outDir=outDir, negatives=negatives,
                  useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
     if actions == None or "statistics" in actions:
         print "==========", "Calculating Statistics", "=========="
@@ -636,6 +636,7 @@ if __name__=="__main__":
     optparser.add_option("--testSet", default=False, action="store_true", help="")
     optparser.add_option("--clear", default=False, action="store_true", help="")
     optparser.add_option("--targets", default="skip", help="skip, overlap or separate")
+    optparser.add_option("--negatives", default=False, action="store_true", help="")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
@@ -646,4 +647,5 @@ if __name__=="__main__":
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
-        useMultiOutputClassifier=options.multioutputclassifier, cafaTargets=options.targets)
+        useMultiOutputClassifier=options.multioutputclassifier, cafaTargets=options.targets,
+        negatives=options.negatives)

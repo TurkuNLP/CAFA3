@@ -240,6 +240,9 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         examples["sets"].append(protein["sets"])
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
+    for group in featureGroups:
+        if group not in ("taxonomy", "similar", "blast", "delta", "interpro", "predgpi", "nucpred"):
+            raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
         builder = TaxonomyFeatureBuilder([os.path.join(dataPath, "Taxonomy")])

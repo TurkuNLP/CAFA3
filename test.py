@@ -449,8 +449,9 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None):
 #     tp = labels.multiply(predicted)
 
 def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, terms, cls=None, verbose=True):
+    args = args.copy()
     print "Learning with args", args
-    if cls != None:
+    if cls == None:
         print "Initializing classifier", Cls.__name__, "with arguments", args
         cls = Cls(**args)
         if useMultiOutputClassifier:
@@ -489,7 +490,7 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
 
 def warmStartGrid(Cls, classifierArgs, examples, terms):
     for key in classifierArgs:
-        if key != "n_estimators" and len(args[key]) > 1:
+        if key != "n_estimators" and len(classifierArgs[key]) > 1:
             raise Exception("Multiple classifier argument values defined for argument '" + str(key) + "'")
     args = classifierArgs.copy()
     numEstimatorList = sorted(args["n_estimators"])
@@ -506,7 +507,7 @@ def warmStartGrid(Cls, classifierArgs, examples, terms):
         cls, data = learn(Cls, args, examples, ["train"], ["devel"], False, terms, cls=cls, verbose=False)
         performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
         performances[-1]["n"] = n
-        if best == None or data["results"]["average"]["auc"] > data["results"]["average"]["auc"]:
+        if best == None or data["results"]["average"]["auc"] > best["results"]["average"]["auc"]:
             best = data
         else: # Release the not-best results
             data = None
@@ -524,12 +525,13 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
     else:
         for args in ParameterGrid(classifierArgs):
             _, data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
-            if best == None or data["results"]["average"]["auc"] > data["results"]["average"]["auc"]:
+            if best == None or data["results"]["average"]["auc"] > best["results"]["average"]["auc"]:
                 best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
             else: # Release the not-best results
                 data = None
     print "Best classifier arguments:", best["args"]
     print "Best development set results:", metricsToString(best["results"]["average"])
+    print getResultsString(best["results"], 20, ["average"])
     if outDir != None:
         saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
     if useTestSet:

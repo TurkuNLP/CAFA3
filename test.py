@@ -148,26 +148,29 @@ def loadSplit(inPath, proteins):
             for line in f:
                 protId = line.strip()
                 assert protId in proteins
-                proteins[protId]["origSet"] = dataset
+                proteins[protId]["split"] = dataset
 
 def defineSets(proteins, cafaTargets):
     counts = defaultdict(int)
     for protein in proteins.values():
         cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
-        origSet = [protein["origSet"]] if protein.get("origSet") != None else []
+        splitSet = [protein["split"]] if protein.get("split") != None else []
         if len(cafaSet) > 0:
             if cafaTargets == "overlap":
-                protein["sets"] = cafaSet + origSet
+                protein["sets"] = cafaSet + splitSet
             elif cafaTargets == "separate":
-                if "train" in origSet:
+                if "train" in splitSet:
                     protein["sets"] = cafaSet
                 else:
-                    protein["sets"] = cafaSet + origSet
+                    protein["sets"] = cafaSet + splitSet
+            elif cafaTargets == "external":
+                protein["sets"] = splitSet if len(splitSet) > 0 else cafaSet
             else:
                 raise Exception("CAFA targets were loaded with mode '" + cafaTargets + "'")
         else:
-            protein["sets"] = origSet
-        category = ",".join(cafaSet + origSet) + "=>" + ",".join(protein["sets"])
+            protein["sets"] = splitSet
+        assert len(protein["sets"]) > 0
+        category = ",".join(cafaSet + splitSet) + "=>" + ",".join(protein["sets"])
         counts[category] += 1
     print "Defined sets:", dict(counts)
 
@@ -566,7 +569,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     if actions != None:
         for action in actions:
             assert action in ("build", "classify", "statistics")
-    assert cafaTargets in ("skip", "overlap", "separate")
+    assert cafaTargets in ("skip", "overlap", "separate", "external")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     terms = loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     

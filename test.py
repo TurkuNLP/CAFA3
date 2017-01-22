@@ -490,6 +490,12 @@ def learn(Cls, args, examples, trainSets, testSets, useMultiOutputClassifier, te
         data["feature_importances"] = cls.feature_importances_        
     return cls, data
 
+def resultIsBetter(original, new, key="average"):
+    if new[key]["fscore"] != original[key]["fscore"]:
+        return new[key]["fscore"] > original[key]["fscore"]
+    else:
+        return new[key]["auc"] > original[key]["auc"]
+
 def warmStartGrid(Cls, classifierArgs, examples, terms):
     print "Using warm start parameter grid search"
     for key in classifierArgs:
@@ -510,7 +516,7 @@ def warmStartGrid(Cls, classifierArgs, examples, terms):
         cls, data = learn(Cls, args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
         performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
         performances[-1]["n"] = n
-        if best == None or data["results"]["average"]["auc"] > best["results"]["average"]["auc"]:
+        if best == None or resultIsBetter(best["results"], data["results"]):
             best = data
         else: # Release the not-best results
             data = None
@@ -530,7 +536,7 @@ def optimize(classifier, classifierArgs, examples, cvJobs=1, terms=None, useMult
     else:
         for args in ParameterGrid(classifierArgs):
             _, data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
-            if best == None or data["results"]["average"]["auc"] > best["results"]["average"]["auc"]:
+            if best == None or resultIsBetter(best["results"], data["results"]):
                 best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
             else: # Release the not-best results
                 data = None

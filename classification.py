@@ -117,6 +117,9 @@ class Classification():
             print "Using existing predictions for sets", setNames, len(predictions)
             data["predicted"] = predictions
         data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms, averageOnly=averageOnly)
+        print "Average:", metricsToString(data["results"] ["average"])
+        if not averageOnly:
+            print getResultsString(data["results"] , 20, ["average"])
         if outDir != None:
             idStr = "_".join(sorted(setNames))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
@@ -182,7 +185,7 @@ class SingleLabelClassification(Classification):
         #print predictions
         print "Parameter grid search complete"
         examples["labels"] = origLabels
-        examples["label_names"] = [origLabelNames]
+        examples["label_names"] = origLabelNames
         if outDir != None:
             self.predictSets(examples, None, ["devel"], terms, None, negatives, predictions=np.dstack(predictions["devel"])[0])
         if useTestSet:

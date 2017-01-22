@@ -106,11 +106,15 @@ class Classification():
             idStr = "_".join(sorted(testSets))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
     
-    def predictSet(self, examples, classifier, testSets, terms, outDir, negatives):
-        print "Predicting set", testSets
+    def predictSet(self, examples, classifier, testSets, terms, outDir, negatives, predictions=None):
         data = {}
         features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, testSets)
-        data["predicted"] = classifier.predict(features)
+        if predictions == None:
+            print "Predicting set", testSets
+            data["predicted"] = classifier.predict(features)
+        else:
+            print "Using existing predictions for set", testSets
+            data["predicted"] = predictions
         data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms)
         if outDir != None:
             idStr = "_".join(sorted(testSets))
@@ -169,8 +173,16 @@ class SingleLabelClassification(Classification):
                 predictions["test"] = self.catenateLabels(predictions["test"], self.predictSet(examples, clf, ["test"], terms, None, negatives)["predicted"])
             if useCAFASet:
                 predictions["cafa"] = self.catenateLabels(predictions["cafa"], self.predictSet(examples, clf, ["cafa"], terms, None, negatives)["predicted"])
+        print "Parameter grid search complete"
         examples["labels"] = origLabels
-        for predictedSet in ("devel", "test", "cafa"):
-            results
-            if outDir != None:
-                saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
+        if outDir != None:
+            self.predictSet(examples, None, ["devel"], terms, None, negatives, predictions["devel"])
+        if useTestSet:
+            self.predictSet(examples, None, ["test"], terms, None, negatives, predictions["test"])
+        if useCAFASet:
+            self.predictSet(examples, None, ["cafa"], terms, None, negatives, predictions["cafa"])
+#                 
+#         for predictedSet in ("devel", "test", "cafa"):
+#             results
+#             if outDir != None:
+#                 saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)

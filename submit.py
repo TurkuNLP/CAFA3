@@ -58,7 +58,7 @@ def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", part
             f.write(template)
         print "Submitting job", job
         p = subprocess.Popen("sbatch", stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
-        p.communicate(input=template)
+        print p.communicate(input=template)
 
 if __name__=="__main__":       
     from optparse import OptionParser

@@ -14,7 +14,7 @@ try:
 except ImportError:
     import json
 import statistics
-from classification import Classification
+from classification import Classification, SingleLabelClassification
 import loading
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
@@ -127,7 +127,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", negatives=False):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", negatives=False, singleLabelJobs=None):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -177,7 +177,10 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "==========", "Training Classifier", "=========="
         if not os.path.exists(os.path.join(outDir, "features.tsv")):
             loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
-        cls = Classification()
+        if singleLabelJobs == None:
+            cls = Classification()
+        else:
+            cls = SingleLabelClassification(singleLabelJobs)
         cls.optimize(classifier, classifierArgs, examples, terms=terms, 
                      outDir=outDir, negatives=negatives,
                      useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
@@ -203,6 +206,7 @@ if __name__=="__main__":
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     #optparser.add_option("--multioutputclassifier", default=False, action="store_true", help="Use the MultiOutputClassifier to train a separate classifier for each label")
+    optparser.add_option("--singleLabel", default=None, type=int, help="Number of jobs for SingleLabelClassification")
     optparser.add_option("--testSet", default=False, action="store_true", help="Classify the test set")
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
     optparser.add_option("--targets", default="skip", help="How to include the CAFA target proteins, one of 'skip', 'overlap' or 'separate'")
@@ -217,4 +221,4 @@ if __name__=="__main__":
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
-        cafaTargets=options.targets, negatives=options.negatives)
+        cafaTargets=options.targets, negatives=options.negatives, singleLabelJobs=None)

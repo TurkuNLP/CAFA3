@@ -99,12 +99,13 @@ class Classification():
         best["results"] = evaluate(best["gold"], best["predicted"], examples["label_names"], examples["label_size"], terms)
         return best
     
-    def learnSet(self, args, examples, trainSets, testSets, terms, outDir, negatives):
+    def learnSet(self, args, examples, trainSets, testSets, terms, outDir, negatives, averageOnly=False):
         print "Learning sets", testSets, "using sets", trainSets
-        _, data = self.learn(args, examples, trainSets, testSets, terms)
+        clf, data = self.learn(args, examples, trainSets, testSets, terms, averageOnly=averageOnly)
         if outDir != None:
             idStr = "_".join(sorted(testSets))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
+        return clf, data
     
     def predictSets(self, examples, classifier, setNames, terms, outDir, negatives, averageOnly=False, predictions=None):
         data = {}
@@ -170,17 +171,27 @@ class SingleLabelClassification(Classification):
             print "Parameter search for label", labelIndex, terms[labelName]
             examples["labels"] = origLabels[:, labelIndex]
             examples["label_names"] = [labelName]
-            gridFeatures, gridLabels, _, _, _ = self.getSubset(examples, ["train", "devel"])
-            cv = [[None, None]]
-            _, _, cv[0][0], _, _ = self.getSubset(examples, ["train"])
-            _, _, cv[0][1], _, _ = self.getSubset(examples, ["devel"])
-            clf = GridSearchCV(self.Classifier(), classifierArgs, "f1", n_jobs=self.n_jobs, cv=cv)
+            gridFeatures, gridLabels, gridIds, _, _ = self.getSubset(examples, ["train", "devel"])
+            cv = [([], [])]
+            _, _, gridTrainIds, _, _ = self.getSubset(examples, ["train"])
+            gridTrainIds = set(gridTrainIds)
+            #_, _, gridDevelIds, _, _ = self.getSubset(examples, ["devel"])
+            #gridDevelIds = set(gridDevelIds)
+            for i in range(len(gridIds)):
+                if gridIds[i] in gridTrainIds:
+                    cv[0][0].append(i)
+                else:
+                    cv[0][1].append(i)
+            clf = GridSearchCV(self.Classifier(), classifierArgs, "f1_micro", n_jobs=self.n_jobs, cv=cv, refit=False)
             clf.fit(gridFeatures, gridLabels)
             print "Best params", (clf.best_params_, clf.best_score_)
             print "Predicting"
-            if outDir != None:
-                predictions["devel"].append(self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
-                #predictions["devel"] += self.catenateLabels(predictions["devel"], self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
+            clf, data = self.learnSet(clf.best_params_, examples, ["train"], ["devel"], terms, None, negatives, True)
+            predictions["devel"].append(data["predicted"])
+            data = None
+            #if outDir != None:
+            #    predictions["devel"].append(self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
+            #    #predictions["devel"] += self.catenateLabels(predictions["devel"], self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
             if useTestSet:
                 predictions["test"].append(self.predictSets(examples, clf, ["test"], terms, None, negatives, True)["predicted"])
             if useCAFASet:

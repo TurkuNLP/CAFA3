@@ -100,24 +100,25 @@ class Classification():
         return best
     
     def learnSet(self, args, examples, trainSets, testSets, terms, outDir, negatives):
-        print "Learning set", testSets, "using sets", trainSets
+        print "Learning sets", testSets, "using sets", trainSets
         _, data = self.learn(args, examples, trainSets, testSets, terms)
         if outDir != None:
             idStr = "_".join(sorted(testSets))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
     
-    def predictSet(self, examples, classifier, testSets, terms, outDir, negatives, predictions=None):
+    def predictSets(self, examples, classifier, setNames, terms, outDir, negatives, averageOnly=False, predictions=None):
         data = {}
-        features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, testSets)
+        features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, setNames)
         if predictions == None:
-            print "Predicting set", testSets
+            print "Predicting sets", setNames
             data["predicted"] = classifier.predict(features)
+            #print len(data["predicted"])
         else:
-            print "Using existing predictions for set", testSets
+            print "Using existing predictions for sets", setNames, len(predictions)
             data["predicted"] = predictions
-        data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms)
+        data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms, averageOnly=averageOnly)
         if outDir != None:
-            idStr = "_".join(sorted(testSets))
+            idStr = "_".join(sorted(setNames))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
         return data
         
@@ -149,38 +150,43 @@ class SingleLabelClassification(Classification):
         self.n_jobs = n_jobs
     
     def catenateLabels(self, existing, labels):
-        if existing == None:
+        if existing is None:
             return labels
         else:
-            return np.concatenate(existing, labels, axis=1)
+            return np.concatenate((existing, labels))
     
     def optimize(self, classifier, classifierArgs, examples, terms=None, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
         print "Parameter grid search"
         self.Classifier = importNamed(classifier)
         origLabels = examples["labels"]
+        origLabelNames = examples["label_names"]
         predictions = {"devel":None, "test":None, "cafa":None}
+        print "Labels:", len(examples["label_names"])
         for labelIndex in range(len(examples["label_names"])):
-            print "Parameter search for label", labelIndex, examples["label_names"][labelIndex]
-            examples["labels"] = examples["multilabels"][:, labelIndex]
+            labelName = origLabelNames[labelIndex]
+            print "Parameter search for label", labelIndex, terms[labelName]
+            examples["labels"] = origLabels[:, labelIndex]
+            examples["label_names"] = [labelName]
             trainFeatures, trainLabels, _, _, _ = self.getSubset(examples, ["train"])
-            clf = GridSearchCV(self.Classifier, classifierArgs, "f1score", n_jobs=self.n_jobs)
+            clf = GridSearchCV(self.Classifier(), classifierArgs, "f1", n_jobs=self.n_jobs)
             clf.fit(trainFeatures, trainLabels)
             print "Best params", (clf.best_params_, clf.best_score_)
             print "Predicting"
             if outDir != None:
-                predictions["devel"] = self.catenateLabels(predictions["devel"], self.predictSet(examples, clf, ["devel"], terms, None, negatives)["predicted"])
+                predictions["devel"] = self.catenateLabels(predictions["devel"], self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
             if useTestSet:
-                predictions["test"] = self.catenateLabels(predictions["test"], self.predictSet(examples, clf, ["test"], terms, None, negatives)["predicted"])
+                predictions["test"] = self.catenateLabels(predictions["test"], self.predictSets(examples, clf, ["test"], terms, None, negatives, True)["predicted"])
             if useCAFASet:
-                predictions["cafa"] = self.catenateLabels(predictions["cafa"], self.predictSet(examples, clf, ["cafa"], terms, None, negatives)["predicted"])
+                predictions["cafa"] = self.catenateLabels(predictions["cafa"], self.predictSets(examples, clf, ["cafa"], terms, None, negatives, True)["predicted"])
         print "Parameter grid search complete"
         examples["labels"] = origLabels
+        examples["label_names"] = [origLabelNames]
         if outDir != None:
-            self.predictSet(examples, None, ["devel"], terms, None, negatives, predictions["devel"])
+            self.predictSets(examples, None, ["devel"], terms, None, negatives, predictions["devel"])
         if useTestSet:
-            self.predictSet(examples, None, ["test"], terms, None, negatives, predictions["test"])
+            self.predictSets(examples, None, ["test"], terms, None, negatives, predictions["test"])
         if useCAFASet:
-            self.predictSet(examples, None, ["cafa"], terms, None, negatives, predictions["cafa"])
+            self.predictSets(examples, None, ["cafa"], terms, None, negatives, predictions["cafa"])
 #                 
 #         for predictedSet in ("devel", "test", "cafa"):
 #             results

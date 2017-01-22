@@ -1,4 +1,6 @@
-from evaluation import evaluate, metricsToString, getResultsString
+from evaluation import evaluate, metricsToString, getResultsString, resultIsBetter, saveResults
+from sklearn.grid_search import ParameterGrid
+import os
 
 def importNamed(name):
     asName = name.rsplit(".", 1)[-1]
@@ -60,12 +62,6 @@ class Classification():
             data["feature_importances"] = cls.feature_importances_        
         return cls, data
     
-    def resultIsBetter(self, original, new, key="average"):
-        if new[key]["fscore"] != original[key]["fscore"]:
-            return new[key]["fscore"] > original[key]["fscore"]
-        else:
-            return new[key]["auc"] > original[key]["auc"]
-    
     def warmStartGrid(self, classifierArgs, examples, terms):
         print "Using warm start parameter grid search"
         for key in classifierArgs:
@@ -83,7 +79,7 @@ class Classification():
                 args["n_estimators"] = n
                 cls.n_estimators = n
                 print "cls.n_estimators = ", cls.n_estimators
-            cls, data = learn(Cls, args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
+            cls, data = self.learn(args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
             performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
             performances[-1]["n"] = n
             if best == None or resultIsBetter(best["results"], data["results"]):
@@ -102,10 +98,10 @@ class Classification():
         print "Parameter grid search"
         self.Classifier = importNamed(classifier)
         if classifierArgs.get("warm_start") == [True]:
-            best = warmStartGrid(Cls, classifierArgs, examples, terms)
+            best = self.warmStartGrid(classifierArgs, examples, terms)
         else:
             for args in ParameterGrid(classifierArgs):
-                _, data = learn(Cls, args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
+                _, data = self.learn(args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
                 if best == None or resultIsBetter(best["results"], data["results"]):
                     best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
                 else: # Release the not-best results
@@ -117,11 +113,11 @@ class Classification():
             saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
         if useTestSet:
             print "Classifying the test set"
-            _, data = learn(Cls, best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
+            _, data = self.learn(best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
             if outDir != None:
                 saveResults(data, os.path.join(outDir, "test"), examples["label_names"], negatives=negatives)
         if useCAFASet:
             print "Classifying the CAFA targets"
-            _, data = learn(Cls, best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
+            _, data = self.learn(best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
             if outDir != None:
                 saveResults(data, os.path.join(outDir, "cafa"), examples["label_names"], negatives=negatives)

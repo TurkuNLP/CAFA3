@@ -48,6 +48,12 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None, averag
         results[key].update(stats[key])
     return results
 
+def resultIsBetter(original, new, key="average"):
+    if new[key]["fscore"] != original[key]["fscore"]:
+        return new[key]["fscore"] > original[key]["fscore"]
+    else:
+        return new[key]["auc"] > original[key]["auc"]
+        
 # def countInstances(labels, predicted):
 #     tp = labels.multiply(predicted)
 #     tp = labels.multiply(predicted)

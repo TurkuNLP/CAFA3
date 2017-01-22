@@ -57,7 +57,7 @@ class Classification():
         if hasattr(cls, "predict_proba"):
             print "Predicting probabilities"
             probabilities = cls.predict_proba(testFeatures)
-        results = evaluate(testLabels, predicted, examples["label_names"], examples["label_size"], terms, averageOnly=averageOnly, average=average)
+        results = evaluate(testLabels, predicted, examples, terms, averageOnly=averageOnly, average=average)
         print "Average:", metricsToString(results["average"])
         if not averageOnly:
             print getResultsString(results, 20, ["average"])
@@ -68,36 +68,36 @@ class Classification():
             data["feature_importances"] = cls.feature_importances_        
         return cls, data
     
-    def warmStartGrid(self, classifierArgs, examples, terms):
-        print "Using warm start parameter grid search"
-        for key in classifierArgs:
-            if key != "n_estimators" and len(classifierArgs[key]) > 1:
-                raise Exception("Multiple classifier argument values defined for argument '" + str(key) + "'")
-        args = classifierArgs.copy()
-        numEstimatorList = sorted(args["n_estimators"])
-        args["n_estimators"] = [numEstimatorList[0]]
-        args = {x:args[x][0] for x in args.keys()}
-        cls = None
-        best = None
-        performances = []
-        for n in numEstimatorList:
-            if cls != None:
-                args["n_estimators"] = n
-                cls.n_estimators = n
-                print "cls.n_estimators = ", cls.n_estimators
-            cls, data = self.learn(args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
-            performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
-            performances[-1]["n"] = n
-            if best == None or resultIsBetter(best["results"], data["results"]):
-                best = data
-            else: # Release the not-best results
-                data = None
-        print "Warm start parameter grid search complete"
-        for performance in performances:
-            print performance["n"], "\t", metricsToString(performance)
-        print "Full evaluation for the best results"
-        best["results"] = evaluate(best["gold"], best["predicted"], examples["label_names"], examples["label_size"], terms)
-        return best
+#     def warmStartGrid(self, classifierArgs, examples, terms):
+#         print "Using warm start parameter grid search"
+#         for key in classifierArgs:
+#             if key != "n_estimators" and len(classifierArgs[key]) > 1:
+#                 raise Exception("Multiple classifier argument values defined for argument '" + str(key) + "'")
+#         args = classifierArgs.copy()
+#         numEstimatorList = sorted(args["n_estimators"])
+#         args["n_estimators"] = [numEstimatorList[0]]
+#         args = {x:args[x][0] for x in args.keys()}
+#         cls = None
+#         best = None
+#         performances = []
+#         for n in numEstimatorList:
+#             if cls != None:
+#                 args["n_estimators"] = n
+#                 cls.n_estimators = n
+#                 print "cls.n_estimators = ", cls.n_estimators
+#             cls, data = self.learn(args, examples, ["train"], ["devel"], False, terms, cls=cls, averageOnly=True)
+#             performances.append({x:data["results"]["average"][x] for x in ("auc", "fscore", "precision", "recall")})
+#             performances[-1]["n"] = n
+#             if best == None or resultIsBetter(best["results"], data["results"]):
+#                 best = data
+#             else: # Release the not-best results
+#                 data = None
+#         print "Warm start parameter grid search complete"
+#         for performance in performances:
+#             print performance["n"], "\t", metricsToString(performance)
+#         print "Full evaluation for the best results"
+#         best["results"] = evaluate(best["gold"], best["predicted"], examples, terms)
+#         return best
     
     def learnSet(self, args, examples, trainSets, testSets, terms, outDir, negatives, averageOnly=False, average="micro"):
         print "Learning sets", testSets, "using sets", trainSets
@@ -117,7 +117,7 @@ class Classification():
         else:
             print "Using existing predictions for sets", setNames, len(predictions)
             data["predicted"] = predictions
-        data["results"] = evaluate(data["gold"], data["predicted"], examples["label_names"], examples["label_size"], terms, averageOnly=averageOnly, average=average)
+        data["results"] = evaluate(data["gold"], data["predicted"], examples, terms, averageOnly=averageOnly, average=average)
         print "Average:", metricsToString(data["results"] ["average"])
         if not averageOnly:
             print getResultsString(data["results"] , 20, ["average"])
@@ -164,6 +164,7 @@ class SingleLabelClassification(Classification):
         self.Classifier = importNamed(classifier)
         origLabels = examples["labels"]
         origLabelNames = examples["label_names"]
+        examples["label_args"] = {}
         predictions = {"devel":[], "test":[], "cafa":[]}
         print "Labels:", len(examples["label_names"])
         for labelIndex in range(len(examples["label_names"])):
@@ -185,6 +186,7 @@ class SingleLabelClassification(Classification):
             clf = GridSearchCV(self.Classifier(), classifierArgs, "f1", n_jobs=self.n_jobs, cv=cv, refit=False)
             clf.fit(gridFeatures, gridLabels)
             print "Best params", (clf.best_params_, clf.best_score_)
+            examples["label_args"][labelName] = clf.best_params_
             print "Predicting"
             clf, data = self.learnSet(clf.best_params_, examples, ["train"], ["devel"], terms, None, negatives, True, "binary")
             predictions["devel"].append(data["predicted"])
@@ -201,11 +203,11 @@ class SingleLabelClassification(Classification):
         examples["labels"] = origLabels
         examples["label_names"] = origLabelNames
         if outDir != None:
-            self.predictSets(examples, None, ["devel"], terms, None, negatives, predictions=np.dstack(predictions["devel"])[0])
+            self.predictSets(examples, None, ["devel"], terms, outDir, negatives, predictions=np.dstack(predictions["devel"])[0])
         if useTestSet:
-            self.predictSets(examples, None, ["test"], terms, None, negatives, predictions=np.dstack(predictions["test"])[0])
+            self.predictSets(examples, None, ["test"], terms, outDir, negatives, predictions=np.dstack(predictions["test"])[0])
         if useCAFASet:
-            self.predictSets(examples, None, ["cafa"], terms, None, negatives, predictions=np.dstack(predictions["cafa"])[0])
+            self.predictSets(examples, None, ["cafa"], terms, outDir, negatives, predictions=np.dstack(predictions["cafa"])[0])
 #                 
 #         for predictedSet in ("devel", "test", "cafa"):
 #             results

@@ -3,7 +3,7 @@ import numpy as np
 import gzip
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
 
-def evaluate(labels, predicted, label_names, label_size=None, terms=None, averageOnly=False, average="micro"):
+def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average="micro"):
     print "Evaluating the predictions"
     results = {}
     print "Calculating average scores"
@@ -17,7 +17,11 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None, averag
     results["average"]["recall"] = recall_score(labels, predicted, average=average)
     if averageOnly:
         return results
+    
     print "Calculating label scores"
+    label_names = examples["label_names"]
+    label_size = examples.get("label_size")
+    label_args = examples.get("label_args")
     try:
         aucs = roc_auc_score(labels, predicted, average=None)
     except ValueError as e:
@@ -34,6 +38,8 @@ def evaluate(labels, predicted, label_names, label_size=None, terms=None, averag
         results[label_name] = result
         if label_size != None:
             result["label_size"] = label_size[label_name]
+        if label_args != None:
+            result["label_args"] = label_args[label_name]
         if terms != None and label_name in terms:
             term = terms[label_name]
             result["ns"] = term["ns"]
@@ -77,7 +83,7 @@ def getResultsString(results, maxNumber=None, skipIds=None):
 def saveResults(data, outStem, label_names, negatives=False):
     print "Writing results to", outStem + "-results.tsv"
     with open(outStem + "-results.tsv", "wt") as f:
-        dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "tp", "fp", "tn", "fn", "id", "label_size", "ns", "name"], delimiter='\t')
+        dw = csv.DictWriter(f, ["auc", "fscore", "precision", "recall", "tp", "fp", "tn", "fn", "id", "label_size", "ns", "name", "label_args"], delimiter='\t')
         dw.writeheader()
         dw.writerow(data["results"]["average"])
         results = [x for x in data["results"].values() if x["id"] != "average"]

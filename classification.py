@@ -109,7 +109,7 @@ class Classification():
     def predictSets(self, examples, classifier, setNames, terms, outDir, negatives, averageOnly=False, predictions=None):
         data = {}
         features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, setNames)
-        if predictions == None:
+        if classifier != None:
             print "Predicting sets", setNames
             data["predicted"] = classifier.predict(features)
             #print len(data["predicted"])
@@ -149,18 +149,18 @@ class SingleLabelClassification(Classification):
     def __init__(self, n_jobs):
         self.n_jobs = n_jobs
     
-    def catenateLabels(self, existing, labels):
-        if existing is None:
-            return labels
-        else:
-            return np.concatenate((existing, labels))
+#     def catenateLabels(self, existing, labels):
+#         if existing is None:
+#             return labels
+#         else:
+#             return np.array([existing, labels]) #np.concatenate((existing, labels))
     
     def optimize(self, classifier, classifierArgs, examples, terms=None, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
         print "Parameter grid search"
         self.Classifier = importNamed(classifier)
         origLabels = examples["labels"]
         origLabelNames = examples["label_names"]
-        predictions = {"devel":None, "test":None, "cafa":None}
+        predictions = {"devel":[], "test":[], "cafa":[]}
         print "Labels:", len(examples["label_names"])
         for labelIndex in range(len(examples["label_names"])):
             labelName = origLabelNames[labelIndex]
@@ -173,20 +173,22 @@ class SingleLabelClassification(Classification):
             print "Best params", (clf.best_params_, clf.best_score_)
             print "Predicting"
             if outDir != None:
-                predictions["devel"] = self.catenateLabels(predictions["devel"], self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
+                predictions["devel"].append(self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
+                #predictions["devel"] += self.catenateLabels(predictions["devel"], self.predictSets(examples, clf, ["devel"], terms, None, negatives, True)["predicted"])
             if useTestSet:
-                predictions["test"] = self.catenateLabels(predictions["test"], self.predictSets(examples, clf, ["test"], terms, None, negatives, True)["predicted"])
+                predictions["test"].append(self.predictSets(examples, clf, ["test"], terms, None, negatives, True)["predicted"])
             if useCAFASet:
-                predictions["cafa"] = self.catenateLabels(predictions["cafa"], self.predictSets(examples, clf, ["cafa"], terms, None, negatives, True)["predicted"])
+                predictions["cafa"].append(self.predictSets(examples, clf, ["cafa"], terms, None, negatives, True)["predicted"])
+        #print predictions
         print "Parameter grid search complete"
         examples["labels"] = origLabels
         examples["label_names"] = [origLabelNames]
         if outDir != None:
-            self.predictSets(examples, None, ["devel"], terms, None, negatives, predictions["devel"])
+            self.predictSets(examples, None, ["devel"], terms, None, negatives, predictions=np.dstack(predictions["devel"])[0])
         if useTestSet:
-            self.predictSets(examples, None, ["test"], terms, None, negatives, predictions["test"])
+            self.predictSets(examples, None, ["test"], terms, None, negatives, predictions=np.dstack(predictions["test"])[0])
         if useCAFASet:
-            self.predictSets(examples, None, ["cafa"], terms, None, negatives, predictions["cafa"])
+            self.predictSets(examples, None, ["cafa"], terms, None, negatives, predictions=np.dstack(predictions["cafa"])[0])
 #                 
 #         for predictedSet in ("devel", "test", "cafa"):
 #             results

@@ -47,9 +47,9 @@ def submit(command, outDir, job, memory=4000, cores=1, wallTime="48:00:00", part
     for param, value in [("%commandPath", commandPath), ("%command", command), ("%outDir", outDir), ("%job", job), ("%memory", memory), ("%cores", cores), ("%wallTime", wallTime), ("%partition", partition)]:
         if value == None:
             raise Exception("Undefined parameter '" + param + "'")
-        print (param, value)
+        #print (param, value)
         template = template.replace(param, str(value))
-        print template
+        #print template
     print "==========", "Template", "=========="
     print template
     print "===================================="

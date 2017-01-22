@@ -170,9 +170,12 @@ class SingleLabelClassification(Classification):
             print "Parameter search for label", labelIndex, terms[labelName]
             examples["labels"] = origLabels[:, labelIndex]
             examples["label_names"] = [labelName]
-            trainFeatures, trainLabels, _, _, _ = self.getSubset(examples, ["train"])
-            clf = GridSearchCV(self.Classifier(), classifierArgs, "f1", n_jobs=self.n_jobs)
-            clf.fit(trainFeatures, trainLabels)
+            gridFeatures, gridLabels, _, _, _ = self.getSubset(examples, ["train", "devel"])
+            cv = [[None, None]]
+            _, _, cv[0][0], _, _ = self.getSubset(examples, ["train"])
+            _, _, cv[0][1], _, _ = self.getSubset(examples, ["devel"])
+            clf = GridSearchCV(self.Classifier(), classifierArgs, "f1", n_jobs=self.n_jobs, cv=cv)
+            clf.fit(gridFeatures, gridLabels)
             print "Best params", (clf.best_params_, clf.best_score_)
             print "Predicting"
             if outDir != None:

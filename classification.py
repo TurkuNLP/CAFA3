@@ -93,7 +93,7 @@ class Classification():
         best["results"] = evaluate(best["gold"], best["predicted"], examples["label_names"], examples["label_size"], terms)
         return best
     
-    def optimize(self, classifier, classifierArgs, examples, cvJobs=1, terms=None, useMultiOutputClassifier=False, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
+    def optimize(self, classifier, classifierArgs, examples, cvJobs=1, terms=None, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
         best = None
         print "Parameter grid search"
         self.Classifier = importNamed(classifier)
@@ -101,7 +101,7 @@ class Classification():
             best = self.warmStartGrid(classifierArgs, examples, terms)
         else:
             for args in ParameterGrid(classifierArgs):
-                _, data = self.learn(args, examples, ["train"], ["devel"], useMultiOutputClassifier, terms)
+                _, data = self.learn(args, examples, ["train"], ["devel"], terms)
                 if best == None or resultIsBetter(best["results"], data["results"]):
                     best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
                 else: # Release the not-best results
@@ -113,11 +113,11 @@ class Classification():
             saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
         if useTestSet:
             print "Classifying the test set"
-            _, data = self.learn(best["args"], examples, ["train", "devel"], ["test"], useMultiOutputClassifier, terms)
+            _, data = self.learn(best["args"], examples, ["train", "devel"], ["test"], terms)
             if outDir != None:
                 saveResults(data, os.path.join(outDir, "test"), examples["label_names"], negatives=negatives)
         if useCAFASet:
             print "Classifying the CAFA targets"
-            _, data = self.learn(best["args"], examples, ["train", "devel", "test"], ["cafa"], useMultiOutputClassifier, terms)
+            _, data = self.learn(best["args"], examples, ["train", "devel", "test"], ["cafa"], terms)
             if outDir != None:
                 saveResults(data, os.path.join(outDir, "cafa"), examples["label_names"], negatives=negatives)

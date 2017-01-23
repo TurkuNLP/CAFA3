@@ -91,7 +91,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
     for group in featureGroups:
-        if group not in ("taxonomy", "similar", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred", "netacet"):
+        if group not in ("taxonomy", "similar", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred", "netacet", "funtaxis"):
             raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
@@ -120,6 +120,9 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder.build(protObjs)
     if featureGroups == None or "netacet" in featureGroups:
         builder = NetAcetFeatureBuilder([os.path.join(dataPath, "NetAcet")])
+        builder.build(protObjs)
+    if featureGroups == None or "funtaxis" in featureGroups:
+        builder = FunTaxISFeatureBuilder([os.path.join(dataPath, "FunTaxIS")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

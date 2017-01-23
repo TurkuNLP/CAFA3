@@ -164,13 +164,13 @@ def train():
     devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
     #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
     
-    print "Making baseline predictions"
-    import baseline
-    devel_baseline = baseline.predict(devel_data['prot_ids'], blast_dict, ann_path)
-    devel_baseline_ids = go_to_ids([b[1] for b in devel_baseline], ann_ids)
-    from sklearn import metrics
-    baseline_score = metrics.precision_recall_fscore_support(devel_data['labels'], devel_baseline_ids, average='micro')
-    print 'Baseline score: ', baseline_score
+    #print "Making baseline predictions"
+    #import baseline
+    #devel_baseline = baseline.predict(devel_data['prot_ids'], blast_dict, ann_path)
+    #devel_baseline_ids = go_to_ids([b[1] for b in devel_baseline], ann_ids)
+    #from sklearn import metrics
+    #baseline_score = metrics.precision_recall_fscore_support(devel_data['labels'], devel_baseline_ids, average='micro')
+    #print 'Baseline score: ', baseline_score
     
     #import pdb; pdb.set_trace()
     
@@ -179,15 +179,22 @@ def train():
     input_list = [inputs]
     embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
     
+    mask = Masking()(embedding)
+    
     convs = []
-    for i in [3, 9, 27]:
+    for i in [3, 9]:
         encoded = Convolution1D(50, i, border_mode='valid', activation='linear')(embedding)
-        encoded = GlobalMaxPooling1D()(encoded)
-        convs.append(encoded)
+        #encoded = GlobalMaxPooling1D()(encoded)
+        #convs.append(encoded)
 
-    #mask = Masking()(embedding)
-    #lstm = LSTM(100)(mask)
-    #convs.append(lstm)
+        # LSTM attention
+        lstm = LSTM(50)(mask)
+        #convs.append(lstm)
+        
+        from attention import Attention
+        att = Attention()([encoded, lstm])
+        convs.append(att)
+    
     if use_features:
         feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
         feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding

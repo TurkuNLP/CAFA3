@@ -68,10 +68,10 @@ def metricsToString(result, style="%.3f"):
     return "a/f|p/r|tp/fp/tn/fn = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"] \
         + "|" + "/".join([str(result.get(x, "-")) for x in ("tp", "fp", "tn", "fn")])
 
-def getResultsString(results, maxNumber=None, skipIds=None):
+def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
     count = 0
     s = ""
-    for result in sorted(results.values(), key=lambda x: x["auc"], reverse=True):
+    for result in sorted(results.values(), key=lambda x: x[sortBy], reverse=True):
         if skipIds != None and result["id"] in skipIds:
             continue
         s += metricsToString(result) + " " + str([result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]) + "\n"

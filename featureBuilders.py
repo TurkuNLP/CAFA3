@@ -149,7 +149,7 @@ class PredGPIFeatureBuilder(CSVFeatureBuilder):
 class NetAcetFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
         filePatterns = [re.compile(".+\_sequence\_NetAcet\_extract\.tsv\.gz")]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NAC", "Building NetAcet features", "id", ["id"] + ["col_" + str(x) for x in range(2,14)])
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NET", "Building NetAcet features", "id", ["id"] + ["col_" + str(x) for x in range(2,14)])
 
 class InterProScanFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
@@ -175,6 +175,42 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
             name += ":motif=" + row["motifNumber"]
         # Add the feature for the protein
         features[name] = value
+
+class FunTaxISFeatureBuilder(CSVFeatureBuilder):
+    def __init__(self, inPaths):
+        mapFilePatterns = [re.compile("map\_.+\_organism\.tsv\.gz")]
+        self.mapping = self.readMapping(inPaths, mapFilePatterns)
+        filePatterns = [re.compile(".+_noGO.tsv.gz"), re.compile(".+_GO.tsv.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "FUN", "Building FunTaxIS features", "protein_id")
+    
+    def buildForFile(self, filePath, protById):
+        with gzip.open(filePath, "rt") as f:
+            reader = csv.DictReader(f, delimiter=self.delimiter, fieldnames=self.columns)
+            for row in reader:
+                ncbitax_id = row["ncbitax_id"]
+                if ncbitax_id in self.mapping:
+                    for protId in self.mapping[ncbitax_id]:
+                        features = protById[protId]["features"]
+                        features[self.tag + ":" + row["go_id"]] = 1
+    
+    def setRow(self, features, row, filePath):
+        for key in row:
+            if key != self.protColumn:
+                features[self.tag + ":" + key] = float(row[key])
+    
+    def readMapping(self, mapPaths, mapFilePatterns):
+        print "Reading FunTaxIS Mapping"
+        mapping = {}
+        for filePath in self.getMatchingPaths(mapPaths, mapFilePatterns):
+            print "Reading", filePath
+            with gzip.open(filePath, "rt") as f:
+                reader = csv.DictReader(f, delimiter=self.delimiter)
+                for row in reader:
+                    symbol, taxId = row["symbol"], row["ncbitax_id"]
+                    if taxId not in mapping:
+                        mapping[taxId] = []
+                    mapping[taxId] = symbol
+        return mapping
     
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):

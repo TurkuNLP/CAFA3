@@ -143,7 +143,7 @@ class NucPredFeatureBuilder(CSVFeatureBuilder):
 
 class PredGPIFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
-        filePatterns = [re.compile(".+\_predGPI\.tsv\.gz")]
+        filePatterns = [re.compile("new\_CAFA3\_predGPI\.tsv\.gz"), re.compile("new\_training\_predGPI\.tsv\.gz")]
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "GPI", "Building predGPI features", "protein_id")
 
 class NetAcetFeatureBuilder(CSVFeatureBuilder):

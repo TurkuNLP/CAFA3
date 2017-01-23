@@ -1,4 +1,4 @@
-from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, Flatten, merge, Masking
+from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, GlobalAveragePooling1D, Flatten, merge, Masking
 from keras.models import Model
 from keras.preprocessing import sequence
 from keras.utils import np_utils
@@ -19,14 +19,16 @@ latent_dim = 50 # Amino acid embedding size
 char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
+use_features = False # False = only sequence is used for prediction
+model_dir = './model/' # path for saving model + other required stuff
 
-model_dir = './model/'
 # TODO: Save model + other needed files after training: model, go_id mapping, blast id map
 # TODO: Try some fancy pooling approach
-# TODO: Add normal features (needs data from Suwisa)
-# TODO: Add naive blast baseline for comparison (needs data from Suwisa)
+# TODO: Add normal features
 # TODO: Get prediction statistics
 # TODO: Convert data to a generator
+# TODO: Word dropout?
+# FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -77,6 +79,7 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
     
     split_ids = read_split_ids(split_path)
     
+    prot_ids = []
     x = []
     blast_x = []
     y = []
@@ -87,6 +90,7 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
         prot_id = prot_id.strip().strip('>')
         if prot_id not in split_ids:
             continue
+        prot_ids.append(prot_id)
         seq = seq.strip()
         seq_id_list = [char_dict[s] for s in seq]
         annotations = ann_dict[prot_id]
@@ -94,7 +98,8 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
         y_v = np.zeros((len(ann_ids)), dtype='int')
         y_v[ann_id_list] = 1
         x.append(seq_id_list)
-        blast_x.append(generate_blast_features(prot_id))
+        if use_features:
+            blast_x.append(generate_blast_features(prot_id))
         y.append(y_v)
     
     
@@ -105,26 +110,26 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
     blast_x = np.array(blast_x)
     y = np.array(y)
     
-    return {'sequence': x, 'labels': y, 'features': blast_x}
+    return {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': prot_ids}
 
 def generate_blast_data():
     """
     Creates blast features for the given sequences.
     """
     print 'Reading blast info'
-    blast_f = gzip.open('./data/Swissprot_blast.tsv.gz')
+    blast_f = gzip.open('./data/Swissprot_blast_filtered.tsv.gz')
     blast_data = blast_f.readlines()
     blast_dict = defaultdict(list)
     blast_hits = set()
-    blast_prot = set([line.strip().split('\t')[0] for line in blast_data])
+    #blast_prot = set([line.strip().split('\t')[0] for line in blast_data])
     for e, line in enumerate(blast_data):
         if e % 1000000 == 0:
             print e
         data = line.strip().split('\t')
         prot_id = data[0]
         hit = data[4]
-        if hit not in blast_prot:
-            continue
+        #if hit not in blast_prot:
+        #    continue
         score = float(data[9])
         blast_dict[prot_id].append((hit, score))
         blast_hits.add(hit)
@@ -133,6 +138,7 @@ def generate_blast_data():
     
     return blast_dict, blast_hit_ids
 
+#if use_features:
 blast_dict, blast_hit_ids = generate_blast_data()
 
 def generate_blast_features(prot_id):
@@ -141,37 +147,59 @@ def generate_blast_features(prot_id):
         x[blast_hit_ids[hit]] = score
     return x
 
+def go_to_ids(predictions, ann_ids):
+    y = []
+    for p in predictions:
+        ann_id_list = [ann_ids[a] for a in p if a in ann_ids]
+        y_v = np.zeros((len(ann_ids)), dtype='int')
+        y_v[ann_id_list] = 1
+        y.append(y_v)
+    return np.array(y)
+
 def train():
     print 'Generating training data'
-    ann_ids, reverse_ann_ids = get_annotation_ids('./data/Swissprot_propagated.tsv.gz', top=4000)
-    train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
-    devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
-    #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', './data/Swissprot_propagated.tsv.gz', ann_ids)
+    ann_path = './data/Swissprot_propagated.tsv.gz'
+    ann_ids, reverse_ann_ids = get_annotation_ids(ann_path, top=4000)
+    train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    
+    print "Making baseline predictions"
+    import baseline
+    devel_baseline = baseline.predict(devel_data['prot_ids'], blast_dict, ann_path)
+    devel_baseline_ids = go_to_ids([b[1] for b in devel_baseline], ann_ids)
+    from sklearn import metrics
+    baseline_score = metrics.precision_recall_fscore_support(devel_data['labels'], devel_baseline_ids, average='micro')
+    print 'Baseline score: ', baseline_score
+    
+    #import pdb; pdb.set_trace()
     
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
+    input_list = [inputs]
     embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
     
     convs = []
     for i in [3, 9, 27]:
-        encoded = Convolution1D(50, i, border_mode='valid')(embedding)
+        encoded = Convolution1D(50, i, border_mode='valid', activation='linear')(embedding)
         encoded = GlobalMaxPooling1D()(encoded)
         convs.append(encoded)
 
     #mask = Masking()(embedding)
     #lstm = LSTM(100)(mask)
     #convs.append(lstm)
-    
-    feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
-    feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
-    convs.append(feature_encoding)
+    if use_features:
+        feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
+        feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
+        convs.append(feature_encoding)
+        input_list.append(feature_input)
     #
     #encoded = feature_encoding
     encoded = merge(convs, mode='concat')
     
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
     
-    model = Model([inputs, feature_input], predictions)
+    model = Model(input_list, predictions)
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
     print model.summary()
     

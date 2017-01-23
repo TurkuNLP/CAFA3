@@ -119,9 +119,9 @@ class CSVFeatureBuilder(MultiFileFeatureBuilder):
 
 class BlastFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths, tag="BLAST"): 
-        filePatterns = (re.compile("target.[0-9]+.features_tsv.gz"), re.compile("Swissprot\_sequence\_[0-9].features\_tsv.gz"))
+        filePatterns = (re.compile("target.[0-9]+.features_tsv.gz"), re.compile("Swissprot\_sequence\_[0-9].features\_tsv.gz"), re.compile("sequence\_[0-9]+.fasta.features\_tsv.gz"))
         columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLASTP features", "Uniprot_ID query", columns)
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLAST features", "Uniprot_ID query", columns)
     
     def setRow(self, features, row, filePath):
         features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])

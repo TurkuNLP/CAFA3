@@ -91,7 +91,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
     for group in featureGroups:
-        if group not in ("taxonomy", "similar", "blast", "delta", "interpro", "predgpi", "nucpred"):
+        if group not in ("taxonomy", "similar", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred"):
             raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
@@ -102,6 +102,9 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder.build(protObjs)
     if featureGroups == None or "blast" in featureGroups:
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")])
+        builder.build(protObjs)
+    if featureGroups == None or "blast62" in featureGroups:
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "CAFA2", "training_features"), os.path.join(dataPath, "CAFA2", "CAFA3_features")])
         builder.build(protObjs)
     if featureGroups == None or "delta" in featureGroups:
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA")

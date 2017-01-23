@@ -186,15 +186,29 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
     def buildForFile(self, filePath, protById):
         with gzip.open(filePath, "rt") as f:
             reader = csv.DictReader(f, delimiter=self.delimiter, fieldnames=self.columns)
+            current_ncbitax_id = None
+            currentProteins = None
             for row in reader:
                 ncbitax_id = row["ncbitax_id"]
-                if ncbitax_id in self.mapping:
-                    for protId in self.mapping[ncbitax_id]:
-                        if protId in protById[protId]:
-                            features = protById[protId]["features"]
-                            baseName = self.tag + ":" + row["go_id"] + ":"
+                if ncbitax_id != current_ncbitax_id:
+                    current_ncbitax_id = ncbitax_id
+                    currentProteins = []
+                    if ncbitax_id in self.mapping:
+                        for protId in self.mapping[ncbitax_id]:
+                            if protId in protById:
+                                self.addToCoverage(protId)
+                                currentProteins.append(protById[protId])
+                    if len(currentProteins) == 0:
+                        currentProteins = None
+                if currentProteins != None:
+                    for protein in currentProteins:
+                        features = protein["features"]
+                        baseName = self.tag + ":" + row["go_id"] + ":"
+                        if row["conf"] == "None":
+                            features[baseName + ":conf=None"] = 1
+                        else:
                             features[baseName + ":conf"] = float(row["conf"])
-                            features[baseName + ":no_protein"] = int(row["no_protein"])
+                        features[baseName + ":no_protein"] = int(row["no_protein"])
     
     def readMapping(self, mapPaths, mapFilePatterns):
         print "Reading FunTaxIS Mapping"
@@ -205,7 +219,7 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
                 reader = csv.DictReader(f, delimiter=self.delimiter)
                 for row in reader:
                     symbol, taxId = row["symbol"], row["ncbitax_id"]
-                    assert "_" in symbol, row
+                    #assert "_" in symbol, row
                     if taxId not in mapping:
                         mapping[taxId] = []
                     mapping[taxId].append(symbol)

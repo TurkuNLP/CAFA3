@@ -136,10 +136,10 @@ class TaxonomyFeatureBuilder(KeyValueFeatureBuilder):
         for taxonomyLevel in value.split(","):
             features[self.tag + ":" + taxonomyLevel] = 1
 
-class NucPredFeatureBuilder(KeyValueFeatureBuilder):
+class NucPredFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
-        filePatterns = [re.compile(".+\_nucPred\.tsv\.gz")]
-        KeyValueFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", skipHeader=False)
+        filePatterns = [re.compile("CAFA3\_nucPred\.tsv\.gz"), re.compile("training\_nucPred\.tsv\.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", "Sequence-ID")
 
 class PredGPIFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):

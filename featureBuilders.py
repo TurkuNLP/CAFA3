@@ -201,14 +201,16 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
                     if len(currentProteins) == 0:
                         currentProteins = None
                 if currentProteins != None:
+                    baseName = self.tag + ":" + row["go_id"]
+                    if row["conf"] == "None":
+                        f1Name, f1Value = baseName + ":conf=None", 1
+                    else:
+                        f1Name, f1Value = baseName + ":conf", float(row["conf"])
+                    f2Name, f2Value = baseName + ":no_protein", int(row["no_protein"])
                     for protein in currentProteins:
                         features = protein["features"]
-                        baseName = self.tag + ":" + row["go_id"] + ":"
-                        if row["conf"] == "None":
-                            features[baseName + ":conf=None"] = 1
-                        else:
-                            features[baseName + ":conf"] = float(row["conf"])
-                        features[baseName + ":no_protein"] = int(row["no_protein"])
+                        features[f1Name] = f1Value
+                        features[f2Name] = f2Value
     
     def readMapping(self, mapPaths, mapFilePatterns):
         print "Reading FunTaxIS Mapping"

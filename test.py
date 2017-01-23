@@ -91,7 +91,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
     for group in featureGroups:
-        if group not in ("taxonomy", "similar", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred"):
+        if group not in ("taxonomy", "similar", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred", "netacet"):
             raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
@@ -113,10 +113,13 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
         builder.build(protObjs)
     if featureGroups == None or "predgpi" in featureGroups:
-        builder = GPIAnchoringFeatureBuilder([os.path.join(dataPath, "predGPI")])
+        builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")])
         builder.build(protObjs)
     if featureGroups == None or "nucpred" in featureGroups:
         builder = NucPredFeatureBuilder([os.path.join(dataPath, "nucPred")])
+        builder.build(protObjs)
+    if featureGroups == None or "netacet" in featureGroups:
+        builder = NetAcetFeatureBuilder([os.path.join(dataPath, "NetAcet")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

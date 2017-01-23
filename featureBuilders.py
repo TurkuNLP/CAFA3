@@ -178,10 +178,10 @@ class InterProScanFeatureBuilder(CSVFeatureBuilder):
 
 class FunTaxISFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
+        filePatterns = [re.compile(".+\_FunTaxIS\.tsv\.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "FUN", "Building FunTaxIS features", None)
         mapFilePatterns = [re.compile("map\_.+\_organism\.tsv\.gz")]
         self.mapping = self.readMapping(inPaths, mapFilePatterns)
-        filePatterns = [re.compile(".+\_FunTaxIS\.tsv\.gz")]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "FUN", "Building FunTaxIS features")
     
     def buildForFile(self, filePath, protById):
         with gzip.open(filePath, "rt") as f:
@@ -190,10 +190,11 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
                 ncbitax_id = row["ncbitax_id"]
                 if ncbitax_id in self.mapping:
                     for protId in self.mapping[ncbitax_id]:
-                        features = protById[protId]["features"]
-                        baseName = self.tag + ":" + row["go_id"] + ":"
-                        features[baseName + ":conf"] = float(row["conf"])
-                        features[baseName + ":no_protein"] = int(row["no_protein"])
+                        if protId in protById[protId]:
+                            features = protById[protId]["features"]
+                            baseName = self.tag + ":" + row["go_id"] + ":"
+                            features[baseName + ":conf"] = float(row["conf"])
+                            features[baseName + ":no_protein"] = int(row["no_protein"])
     
     def readMapping(self, mapPaths, mapFilePatterns):
         print "Reading FunTaxIS Mapping"
@@ -204,9 +205,10 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
                 reader = csv.DictReader(f, delimiter=self.delimiter)
                 for row in reader:
                     symbol, taxId = row["symbol"], row["ncbitax_id"]
+                    assert "_" in symbol, row
                     if taxId not in mapping:
                         mapping[taxId] = []
-                    mapping[taxId] = symbol
+                    mapping[taxId].append(symbol)
         return mapping
     
 class UniprotFeatureBuilder(FeatureBuilder):

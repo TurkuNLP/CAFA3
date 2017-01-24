@@ -106,7 +106,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")])
         builder.build(protObjs)
     if featureGroups == None or "blast62" in featureGroups:
-        builder = BlastFeatureBuilder([os.path.join(dataPath, "CAFA2", "training_features"), os.path.join(dataPath, "CAFA2", "CAFA3_features")])
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "CAFA2", "training_features"), os.path.join(dataPath, "CAFA2", "CAFA3_features")], tag="BLAST62")
         builder.build(protObjs)
     if featureGroups == None or "delta" in featureGroups:
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA")

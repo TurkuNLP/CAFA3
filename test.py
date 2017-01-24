@@ -50,7 +50,7 @@ import loading
 #     print "Divided sets", [(x, len(datasets[x])) for x in sorted(datasets.keys())]
 #     return datasets
 
-ALL_GROUPS = ["taxonomy", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred", "netacet", "funtaxis"]
+ALL_GROUPS = ["taxonomy", "blast", "blast62", "delta", "interpro", "predgpi", "nucpred", "netacet"] #, "funtaxis"]
 
 def getFeatureGroups(groups=None):
     if groups == None:
@@ -93,7 +93,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
     for group in featureGroups:
-        if group not in ALL_GROUPS + ["similar"]:
+        if group not in ALL_GROUPS + ["similar", "funtaxis"]:
             raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:

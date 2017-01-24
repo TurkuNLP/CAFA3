@@ -151,6 +151,14 @@ class NetAcetFeatureBuilder(CSVFeatureBuilder):
         filePatterns = [re.compile(".+\_sequence\_NetAcet\_extract\.tsv\.gz")]
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NET", "Building NetAcet features", "id", ["id"] + ["col_" + str(x) for x in range(2,14)])
 
+class NGramFeatureBuilder(CSVFeatureBuilder):
+    def __init__(self, inPaths):
+        filePatterns = [re.compile(".+-prot2ngram\.tsv\.gz")]
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NGRAM", "Building NGram features", "PROT_ID")
+    
+    def setRow(self, features, row, filePath):
+        features[self.tag + ":NGRAM_ID=" + row["NGRAM_ID"]] = 1
+    
 class InterProScanFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
         filePatterns = [re.compile(".+_noGO.tsv.gz"), re.compile(".+_GO.tsv.gz")]

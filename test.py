@@ -93,7 +93,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
     # Build features
     featureGroups = getFeatureGroups(featureGroups)
     for group in featureGroups:
-        if group not in ALL_GROUPS + ["similar", "funtaxis"]:
+        if group not in ALL_GROUPS + ["similar", "funtaxis", "ngram"]:
             raise Exception("Unknown feature group '" + str(group) + "'")
     print "Building features, feature groups =", featureGroups
     if featureGroups == None or "taxonomy" in featureGroups:
@@ -125,6 +125,9 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder.build(protObjs)
     if featureGroups == None or "funtaxis" in featureGroups:
         builder = FunTaxISFeatureBuilder([os.path.join(dataPath, "FunTaxIS")])
+        builder.build(protObjs)
+    if featureGroups == None or "ngram" in featureGroups:
+        builder = NGramFeatureBuilder([os.path.join(dataPath, "ngrams", "ngrams4jari")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

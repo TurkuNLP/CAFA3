@@ -222,7 +222,7 @@ def train():
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
     
     model = Model(input_list, predictions)
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
+    model.compile(optimizer='adam', loss=weighted_binary_crossentropy, metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
     print model.summary()
     
     print 'Training model'
@@ -232,13 +232,15 @@ def train():
         
     import pdb; pdb.set_trace()
     
-def weighted_binary_crossentropy(y_true, y_pred):
+def weighted_binary_crossentropy(target, output):
     from keras.backend.common import _EPSILON
+    from keras import backend as K
+    from theano import tensor as T
     from theano.tensor import basic as tensor
-    pos_weight = 2.0
+    pos_weight = 3.0 # 73 is roughly the inverse ratio of positives examples
     output = T.clip(output, _EPSILON, 1.0 - _EPSILON)
     ce = -(pos_weight * target * tensor.log(output) + (1.0 - target) * tensor.log(1.0 - output))
-    return ce
+    return K.mean(ce, axis=-1)
     
 if __name__ == '__main__':
     train()

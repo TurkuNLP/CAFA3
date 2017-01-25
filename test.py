@@ -9,6 +9,7 @@ import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
 import shutil
+import makeFolds
 try:
     import ujson as json
 except ImportError:
@@ -141,7 +142,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", negatives=False, singleLabelJobs=None):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, negatives=False, singleLabelJobs=None):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -173,6 +174,8 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
         loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+        if fold != None:
+            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "split", "training_folds.tar.gz"))
         loading.defineSets(proteins, cafaTargets)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
@@ -225,14 +228,18 @@ if __name__=="__main__":
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
     optparser.add_option("--targets", default="skip", help="How to include the CAFA target proteins, one of 'skip', 'overlap' or 'separate'")
     optparser.add_option("--negatives", default=False, action="store_true", help="Write negative predictions in the result files")
+    optparser.add_option("--fold", default=None, type=int)
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
         options.actions = options.actions.split(",")
+    #if options.folds != None:
+    #    options.folds = sorted(set([int(x) for x in options.folds.split(",")]))
     options.args = eval(options.args)
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
     run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
-        cafaTargets=options.targets, negatives=options.negatives, singleLabelJobs=options.singleLabelJobs)
+        cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 
+        singleLabelJobs=options.singleLabelJobs)

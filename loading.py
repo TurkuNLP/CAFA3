@@ -103,11 +103,27 @@ def loadSplit(inPath, proteins):
                 assert protId in proteins
                 proteins[protId]["split"] = dataset
 
-def defineSets(proteins, cafaTargets):
+def defineFoldSets(fold, numFolds=10, numDevel=2):
+    folds = range(numFolds)
+    foldSets = {}
+    foldSets[fold] = "test"
+    assert fold in folds
+    for develFold in range(1, numDevel + 1):
+        if develFold >= numFolds:
+            develFold -= numFolds
+        assert develFold in folds
+        assert develFold not in foldSets
+        foldSets[develFold] = "devel"
+    for
+
+def defineSets(proteins, cafaTargets, fold=None):
     counts = defaultdict(int)
     for protein in proteins.values():
         cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
-        splitSet = [protein["split"]] if protein.get("split") != None else []
+        if fold != None:
+            splitSet = [protein["fold"]] if protein.get("fold") != None else []
+        else:
+            splitSet = [protein["split"]] if protein.get("split") != None else []
         if len(cafaSet) > 0:
             if cafaTargets == "overlap":
                 protein["sets"] = cafaSet + splitSet

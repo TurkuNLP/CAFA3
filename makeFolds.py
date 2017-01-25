@@ -3,7 +3,18 @@ import loading
 from collections import defaultdict
 import random
 import gzip
-from csv import DictWriter
+import csv
+
+def loadFolds(proteins, inPath, checkSplit=True):
+    print "Loading folds from", inPath
+    with open(inPath, "rt") as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        for row in reader:
+            protein = proteins[row["id"]]
+            assert "fold" not in protein
+            if checkSplit:
+                assert protein["split"] == row["split"]
+            protein["fold"] = int(row["fold"])
 
 def saveFolds(proteins, outPath):
     print "Saving folds to", outPath
@@ -12,7 +23,7 @@ def saveFolds(proteins, outPath):
         protein = proteins[key]
         rows.append({"id":key, "fold":protein.get("fold"), "split":protein.get("split")})
     with gzip.open(outPath, "wt") as f:
-        dw = DictWriter(f, ["id", "fold", "split"], delimiter="\t")
+        dw = csv.DictWriter(f, ["id", "fold", "split"], delimiter="\t")
         dw.writeheader()
         dw.writerows(rows)
 

@@ -28,7 +28,9 @@ model_dir = './model/' # path for saving model + other required stuff
 # TODO: Get prediction statistics
 # TODO: Convert data to a generator
 # TODO: Word dropout?
+# TODO: Test conv window sizes and embedding sizes
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
+# TODO: Weight labels
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -173,27 +175,40 @@ def train():
     #print 'Baseline score: ', baseline_score
     
     #import pdb; pdb.set_trace()
-    
+    #for ii in [3, 6, 9, 15, 27, 50]:
+    #    print '### Testing window size %s' % ii
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
     input_list = [inputs]
     embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
     
-    mask = Masking()(embedding)
+    #mask = Masking()(embedding)
     
     convs = []
-    for i in [3, 9]:
-        encoded = Convolution1D(50, i, border_mode='valid', activation='linear')(embedding)
-        #encoded = GlobalMaxPooling1D()(encoded)
-        #convs.append(encoded)
+    
+    # Stacked CNN experiments
+    #encoded = Convolution1D(50, 3, border_mode='valid', activation='linear')(embedding)
+    ##maxed = GlobalMaxPooling1D()(encoded)
+    ##convs.append(maxed)
+    #encoded = Convolution1D(50, 3, border_mode='valid', activation='linear')(encoded)
+    ##maxed = GlobalMaxPooling1D()(encoded)
+    ##convs.append(maxed)
+    #encoded = Convolution1D(50, 3, border_mode='valid', activation='linear')(encoded)
+    #encoded = GlobalMaxPooling1D()(encoded)
+    #convs.append(maxed)
+    
+    for i in [3, 9, 27, 81]:
+        encoded = Convolution1D(50, i, border_mode='valid', activation='relu')(embedding)
+        encoded = GlobalMaxPooling1D()(encoded)
+        convs.append(encoded)
 
-        # LSTM attention
-        lstm = LSTM(50)(mask)
-        #convs.append(lstm)
-        
-        from attention import Attention
-        att = Attention()([encoded, lstm])
-        convs.append(att)
+        ## LSTM attention
+        #lstm = LSTM(50)(mask)
+        ##convs.append(lstm)
+        #
+        #from attention import Attention
+        #att = Attention()([encoded, lstm])
+        #convs.append(att)
     
     if use_features:
         feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
@@ -207,16 +222,23 @@ def train():
     predictions = Dense(len(ann_ids), activation='sigmoid', name='labels')(encoded)
     
     model = Model(input_list, predictions)
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy', 'precision', 'recall', 'fmeasure'])
     print model.summary()
     
     print 'Training model'
     es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1, mode='max')
-    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), save_best_only=True,verbose=1)
+    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', save_best_only=True,verbose=1)
     model.fit(train_data, train_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
-            
+        
     import pdb; pdb.set_trace()
     
+def weighted_binary_crossentropy(y_true, y_pred):
+    from keras.backend.common import _EPSILON
+    from theano.tensor import basic as tensor
+    pos_weight = 2.0
+    output = T.clip(output, _EPSILON, 1.0 - _EPSILON)
+    ce = -(pos_weight * target * tensor.log(output) + (1.0 - target) * tensor.log(1.0 - output))
+    return ce
     
 if __name__ == '__main__':
     train()

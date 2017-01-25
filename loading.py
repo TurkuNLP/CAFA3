@@ -109,7 +109,7 @@ def defineFoldSets(fold, numFolds=10, numDevel=2):
     assert fold in folds
     foldSets = {x:"train" for x in folds}
     foldSets[fold] = "test"
-    for develFold in range(1, numDevel + 1):
+    for develFold in range(fold + 1, fold + 1 + numDevel):
         if develFold >= numFolds:
             develFold -= numFolds
         foldSets[develFold] = "devel"

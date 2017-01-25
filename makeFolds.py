@@ -7,7 +7,10 @@ import csv
 
 def loadFolds(proteins, inPath, checkSplit=True):
     print "Loading folds from", inPath
-    with open(inPath, "rt") as f:
+#     with open(inPath, "rt") as f:
+#         for line in f:
+#             print line
+    with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
             protein = proteins[row["id"]]
@@ -18,11 +21,16 @@ def loadFolds(proteins, inPath, checkSplit=True):
 
 def saveFolds(proteins, outPath):
     print "Saving folds to", outPath
+    outDir = os.path.dirname(outPath)
+    if not os.path.exists(outDir):
+        print "Making output directory", outDir
+        os.makedirs(outDir)
     rows = []
     for key in sorted(proteins.keys()):
         protein = proteins[key]
-        rows.append({"id":key, "fold":protein.get("fold"), "split":protein.get("split")})
-    with gzip.open(outPath, "wt") as f:
+        assert protein.get("fold") != None
+        rows.append({"id":str(key), "fold":str(protein.get("fold")), "split":str(protein.get("split"))})
+    with gzip.open(outPath, "wb") as f:
         dw = csv.DictWriter(f, ["id", "fold", "split"], delimiter="\t")
         dw.writeheader()
         dw.writerows(rows)

@@ -104,24 +104,26 @@ def loadSplit(inPath, proteins):
                 proteins[protId]["split"] = dataset
 
 def defineFoldSets(fold, numFolds=10, numDevel=2):
+    print "Defining train/devel/test split for", str(numFolds) + "-fold cross-validation fold number", fold
     folds = range(numFolds)
-    foldSets = {}
-    foldSets[fold] = "test"
     assert fold in folds
+    foldSets = {x:"train" for x in folds}
+    foldSets[fold] = "test"
     for develFold in range(1, numDevel + 1):
         if develFold >= numFolds:
             develFold -= numFolds
-        assert develFold in folds
-        assert develFold not in foldSets
         foldSets[develFold] = "devel"
-    for
+    print "Cross-validation sets:", ",".join([str(x) + ":" + foldSets[x] for x in sorted(foldSets.keys())])
+    return foldSets
 
 def defineSets(proteins, cafaTargets, fold=None):
     counts = defaultdict(int)
+    if fold != None:
+        foldSets = defineFoldSets(fold)
     for protein in proteins.values():
         cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
         if fold != None:
-            splitSet = [protein["fold"]] if protein.get("fold") != None else []
+            splitSet = [foldSets[protein["fold"]]] if protein.get("fold") != None else []
         else:
             splitSet = [protein["split"]] if protein.get("split") != None else []
         if len(cafaSet) > 0:

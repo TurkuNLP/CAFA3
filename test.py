@@ -175,8 +175,8 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         #print proteins["14310_ARATH"]
         loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
         if fold != None:
-            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "split", "training_folds.tar.gz"))
-        loading.defineSets(proteins, cafaTargets)
+            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz"))
+        loading.defineSets(proteins, cafaTargets, fold=fold)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
         print "Saving examples to", exampleFilePath

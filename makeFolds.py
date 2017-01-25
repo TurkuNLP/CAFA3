@@ -6,23 +6,29 @@ import gzip
 from csv import DictWriter
 
 def saveFolds(proteins, outPath):
+    print "Saving folds to", outPath
     rows = []
     for key in sorted(proteins.keys()):
         protein = proteins[key]
         rows.append({"id":key, "fold":protein.get("fold"), "split":protein.get("split")})
     with gzip.open(outPath, "wt") as f:
-        dw = DictWriter(f, delimiter="\t", columns=["id", "fold", "split"])
+        dw = DictWriter(f, ["id", "fold", "split"], delimiter="\t")
         dw.writeheader()
         dw.writerows(rows)
 
-def makeFolds(proteins):
-    rand = random.Random(1)
-    folds = range(10)
+def makeFolds(proteins, numFolds=10, seed=1):
+    print "Generating", str(numFolds) + "-fold division"
+    rand = random.Random(seed)
+    folds = range(numFolds)
+    counts = defaultdict(int)
     for key in sorted(proteins.keys()):
         protein = proteins[key]
         if protein.get("split") == None:
             continue
         protein["fold"] = rand.choice(folds)
+        counts[protein["fold"]] += 1
+    print "Folds:", dict(counts)
+    print "Total:", sum(counts.values())
 
 def run(dataPath, outPath=None):
     print "==========", "Generating Folds", "=========="

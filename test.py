@@ -128,7 +128,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = FunTaxISFeatureBuilder([os.path.join(dataPath, "FunTaxIS")])
         builder.build(protObjs)
     if featureGroups == None or "ngram" in featureGroups:
-        builder = NGramFeatureBuilder([os.path.join(dataPath, "ngrams", "ngrams4jari")])
+        builder = NGramFeatureBuilder([os.path.join(dataPath, "ngrams", "4jari", "min_len3-min_freq2-min1fun-top_fun5k")])
         builder.build(protObjs)
     builder = None
     examples["features"] = [x["features"] for x in protObjs]

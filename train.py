@@ -23,14 +23,14 @@ use_features = False # False = only sequence is used for prediction
 model_dir = './model/' # path for saving model + other required stuff
 
 # TODO: Save model + other needed files after training: model, go_id mapping, blast id map
-# TODO: Try some fancy pooling approach
 # TODO: Add normal features
 # TODO: Get prediction statistics
 # TODO: Convert data to a generator
 # TODO: Word dropout?
-# TODO: Test conv window sizes and embedding sizes
+# TODO: Test embedding sizes
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
-# TODO: Weight labels
+# TODO: Make predictions for test + cafa targets
+
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -68,7 +68,7 @@ def read_split_ids(split_path):
     split_data = set([s.strip() for s in split_file])
     return split_data
 
-def generate_data(split_path, seq_path, ann_path, ann_ids):
+def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
     """
     Generates NN compatible data.
     """
@@ -79,40 +79,52 @@ def generate_data(split_path, seq_path, ann_path, ann_ids):
     ann_data = ann_file.readlines()
     ann_dict = get_annotation_dict(ann_data)
     
-    split_ids = read_split_ids(split_path)
+    if split_path:
+        split_ids = read_split_ids(split_path)
     
-    prot_ids = []
-    x = []
-    blast_x = []
-    y = []
-
-    for i, (prot_id, seq) in enumerate(pairwise(seq_data)):
-        if i % 10000 == 0:
-            print i
-        prot_id = prot_id.strip().strip('>')
-        if prot_id not in split_ids:
-            continue
-        prot_ids.append(prot_id)
-        seq = seq.strip()
-        seq_id_list = [char_dict[s] for s in seq]
-        annotations = ann_dict[prot_id]
-        ann_id_list = [ann_ids[a] for a in annotations if a in ann_ids]
-        y_v = np.zeros((len(ann_ids)), dtype='int')
-        y_v[ann_id_list] = 1
-        x.append(seq_id_list)
-        if use_features:
-            blast_x.append(generate_blast_features(prot_id))
-        y.append(y_v)
+    while True:
+        prot_ids = []
+        x = []
+        blast_x = []
+        y = []
+        
+        for i, (prot_id, seq) in enumerate(pairwise(seq_data)):
+            #if i % 10000 == 0:
+            #    print i
+            prot_id = prot_id.strip().strip('>')
+            if split_path and prot_id not in split_ids:
+                continue
+            prot_ids.append(prot_id)
+            seq = seq.strip()
+            seq_id_list = [char_dict[s] for s in seq]
+            annotations = ann_dict[prot_id]
+            ann_id_list = [ann_ids[a] for a in annotations if a in ann_ids]
+            y_v = np.zeros((len(ann_ids)), dtype='int')
+            y_v[ann_id_list] = 1
+            x.append(seq_id_list)
+            if use_features:
+                blast_x.append(generate_blast_features(prot_id))
+            y.append(y_v)
+        
+            if len(prot_ids) == batch_size:
+                x = sequence.pad_sequences(x, timesteps)
+                blast_x = np.array(blast_x)
+                y = np.array(y)
+            
+                nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
+                yield nn_data, nn_data
+                
+                prot_ids = []
+                x = []
+                blast_x = []
+                y = []
+                
+        x = sequence.pad_sequences(x, timesteps)
+        blast_x = np.array(blast_x)
+        y = np.array(y)
     
-    
-
-    
-    #import pdb; pdb.set_trace()
-    x = sequence.pad_sequences(x, timesteps)
-    blast_x = np.array(blast_x)
-    y = np.array(y)
-    
-    return {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': prot_ids}
+        nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
+        yield nn_data, nn_data
 
 def generate_blast_data():
     """
@@ -146,6 +158,7 @@ blast_dict, blast_hit_ids = generate_blast_data()
 def generate_blast_features(prot_id):
     x = np.zeros((len(blast_hit_ids)))
     for hit, score in blast_dict[prot_id]:
+        # TODO: Get GO's to transfer
         x[blast_hit_ids[hit]] = score
     return x
 
@@ -158,13 +171,22 @@ def go_to_ids(predictions, ann_ids):
         y.append(y_v)
     return np.array(y)
 
+def _data_size(path):
+    return len(gzip.open(path).readlines())
+
 def train():
     print 'Generating training data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
     ann_ids, reverse_ann_ids = get_annotation_ids(ann_path, top=4000)
-    train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
-    devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    batch_size=100
+    pretrain_data = generate_data(None, '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz', '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ann-train-data.tsv.gz', ann_ids, batch_size)
+    #pretrain_size = _data_size('FIXME')
+    train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+    train_size = _data_size('./data/train.txt.gz')
+    devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+    devel_size = _data_size('./data/devel.txt.gz')
     #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    #test_size = _data_size('./data/test.txt.gz')
     
     #print "Making baseline predictions"
     #import baseline
@@ -228,7 +250,9 @@ def train():
     print 'Training model'
     es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1, mode='max')
     cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', save_best_only=True,verbose=1)
-    model.fit(train_data, train_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
+    #model.fit(pretrain_data, pretrain_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
+    model.fit_generator(train_data, samples_per_epoch=train_size, nb_epoch=100, validation_data=devel_data, nb_val_samples=devel_size, callbacks=[es_cb, cp_cb])
+
         
     import pdb; pdb.set_trace()
     

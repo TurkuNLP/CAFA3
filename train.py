@@ -25,7 +25,6 @@ model_dir = './model/' # path for saving model + other required stuff
 # TODO: Save model + other needed files after training: model, go_id mapping, blast id map
 # TODO: Add normal features
 # TODO: Get prediction statistics
-# TODO: Convert data to a generator
 # TODO: Word dropout?
 # TODO: Test embedding sizes
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
@@ -109,8 +108,8 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
             if len(prot_ids) == batch_size:
                 x = sequence.pad_sequences(x, timesteps)
                 blast_x = np.array(blast_x)
-                y = np.array(y)
-            
+                y = np.array(y, dtype='int32')
+
                 nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
                 yield nn_data, nn_data
                 
@@ -118,13 +117,14 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
                 x = []
                 blast_x = []
                 y = []
-                
-        x = sequence.pad_sequences(x, timesteps)
-        blast_x = np.array(blast_x)
-        y = np.array(y)
-    
-        nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
-        yield nn_data, nn_data
+        
+        if len(prot_ids) > 0:
+            x = sequence.pad_sequences(x, timesteps)
+            blast_x = np.array(blast_x)
+            y = np.array(y)
+        
+            nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
+            yield nn_data, nn_data
 
 def generate_blast_data():
     """
@@ -178,9 +178,9 @@ def train():
     print 'Generating training data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
     ann_ids, reverse_ann_ids = get_annotation_ids(ann_path, top=4000)
-    batch_size=100
-    pretrain_data = generate_data(None, '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz', '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ann-train-data.tsv.gz', ann_ids, batch_size)
-    #pretrain_size = _data_size('FIXME')
+    batch_size=16
+    #pretrain_data = generate_data(None, '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz', '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ann-train-data.tsv.gz', ann_ids, 256)
+    #pretrain_size = _data_size('/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz')/2
     train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
     train_size = _data_size('./data/train.txt.gz')
     devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)

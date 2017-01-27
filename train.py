@@ -26,7 +26,6 @@ model_dir = './model/' # path for saving model + other required stuff
 # TODO: Add normal features
 # TODO: Get prediction statistics
 # TODO: Word dropout?
-# TODO: Test embedding sizes
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
 # TODO: Make predictions for test + cafa targets
 
@@ -95,7 +94,8 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
                 continue
             prot_ids.append(prot_id)
             seq = seq.strip()
-            seq_id_list = [char_dict[s] for s in seq]
+            #seq_id_list = [char_dict[s] for s in seq]
+            seq_id_list = [aa_index_ids.get(s, 0) for s in seq]
             annotations = ann_dict[prot_id]
             ann_id_list = [ann_ids[a] for a in annotations if a in ann_ids]
             y_v = np.zeros((len(ann_ids)), dtype='int')
@@ -126,6 +126,25 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
             nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
             yield nn_data, nn_data
 
+def read_aaindex():
+    aa_f = open('/home/sukaew/CAFA3/aaindex/aaindex_table.tsv')
+    data = aa_f.readlines()
+    amino_acids = data[0].strip().split('\t')[1:]
+    aa_index_ids = {a: i+1 for i, a in enumerate(amino_acids)}
+    
+    embedding = np.zeros((len(amino_acids)+1, len(data)-1)) # +1 for OOV/MASK no separation for now
+    for i, row in enumerate(data[1:]):
+        values = row.strip().split('\t')[1:]
+        for ii, v in enumerate(values):
+            if v == 'NA': # FIXME: What to do with these?
+                v = 0.0
+            embedding[ii+1, i] = float(v)
+        
+    #import pdb; pdb.set_trace()
+    return aa_index_ids, embedding
+
+aa_index_ids, aa_embedding = read_aaindex()
+
 def generate_blast_data():
     """
     Creates blast features for the given sequences.
@@ -152,10 +171,11 @@ def generate_blast_data():
     
     return blast_dict, blast_hit_ids
 
-#if use_features:
-blast_dict, blast_hit_ids = generate_blast_data()
+if use_features:
+    blast_dict, blast_hit_ids = generate_blast_data()
 
 def generate_blast_features(prot_id):
+    
     x = np.zeros((len(blast_hit_ids)))
     for hit, score in blast_dict[prot_id]:
         # TODO: Get GO's to transfer
@@ -202,8 +222,8 @@ def train():
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
     input_list = [inputs]
-    embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
-    
+    #embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
+    embedding = Embedding(aa_embedding.shape[0], aa_embedding.shape[1], mask_zero=False, weights=[aa_embedding], trainable=True)(inputs)
     #mask = Masking()(embedding)
     
     convs = []

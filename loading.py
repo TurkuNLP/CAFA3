@@ -156,9 +156,12 @@ def vectorizeExamples(examples, featureGroups):
     mlb = MultiLabelBinarizer()
     examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
-    dv = DictVectorizer(sparse=True)
-    examples["features"] = dv.fit_transform(examples["features"])
-    examples["feature_names"] = dv.feature_names_
+    if "features" in examples:
+        dv = DictVectorizer(sparse=True)
+        examples["features"] = dv.fit_transform(examples["features"])
+        examples["feature_names"] = dv.feature_names_
+    else:
+        examples["feature_names"] = []
     if featureGroups != None and "select" in featureGroups:
         threshold = .1
         print "Selecting features", examples["features"].shape[1]

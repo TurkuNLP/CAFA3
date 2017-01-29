@@ -4,6 +4,8 @@ import operator
 import filecmp
 import shutil
 
+HEADER_LINE = "id\tlabel_index\tlabel\tpredicted\tconfidence\tgold\tmatch\tcafa_ids\r\n"
+
 def onError(message, errors):
     if errors == "strict":
         raise Exception(message)
@@ -49,6 +51,12 @@ def readLogs(inPath, foldPattern, numFolds, errors):
         s += str(argFold) + "\n"
     return s, argFolds[0][1]
 
+def checkHeaders(f, outFile):
+    line = f.readline()
+    assert line == HEADER_LINE, (HEADER_LINE,  line)
+    if outFile != None:
+        outFile.write(line)
+
 def collect(inPath, numFolds, foldPattern, errors):
     #predictions = {"devel":[], "test":[]}
     #seenIds = {"devel":set(), "test":set()}
@@ -61,7 +69,8 @@ def collect(inPath, numFolds, foldPattern, errors):
     for setName in ("devel", "test"):
         outFiles[setName] = gzip.open(os.path.join(inPath, setName + "-allfolds-predicted.tsv.gz"), "wt")        
     chosenCAFAPath = None
-    for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
+    foldDirs = getFoldDirs(inPath, foldPattern, numFolds)
+    for i, foldDir in foldDirs:
         foldDir = os.path.join(inPath, foldPattern.replace("{NUMBER}", str(i)))
         print "Processing fold", i, foldDir
         if not os.path.exists(foldDir):
@@ -72,6 +81,7 @@ def collect(inPath, numFolds, foldPattern, errors):
             print "Reading", setName, "predictions for fold", i, "from", predPath
             if os.path.exists(predPath):
                 with gzip.open(predPath, "rt") as f:
+                    checkHeaders(f, outFiles[setName] if (i == foldDirs[0][0]) else None)
                     for line in f:
                         outFiles[setName].write(line)
             else:
@@ -87,6 +97,7 @@ def collect(inPath, numFolds, foldPattern, errors):
                     chosenCAFAPath = foldCAFAPath
                     print "Reading CAFA predictions for fold", i, "from", chosenCAFAPath
                     with gzip.open(chosenCAFAPath, "rt") as f:
+                        checkHeaders(f, None) # skip headers
                         for line in f:
                             outFiles["test"].write(line)
             else:

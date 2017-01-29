@@ -30,7 +30,7 @@ def readLogs(inPath, foldPattern, numFolds, errors):
                         assert logLines[i][patternMatch[pattern]] == None
                         logLines[i][patternMatch[pattern]] = line.strip()
     s = ""
-    argCounts = {}
+    argFolds = []
     for i in range(numFolds):
         for pattern in patterns:
             s += "***", pattern, "***"
@@ -38,16 +38,14 @@ def readLogs(inPath, foldPattern, numFolds, errors):
         argLine = logLines[i]["best_args"]
         if argLine != None:
             argString = argLine.split("\t")[-1].strip()
-            if argString not in argCounts:
-                argCounts[argString] = {"count":0, "folds":[]}
-            argCounts[argString]["count"] += 1
-            argCounts[argString]["folds"] += 1
-    freqs = sorted([(argFrequency[key], key) for key in argFrequency], reverse=True)
-    maxHits = freqs[0]
-    mostCommonArgs = max(argFrequency.iteritems(), key=operator.itemgetter(1))[0]
+            if argString not in argFolds:
+                argFolds[argString] = []
+            argFolds[argString].append(i)
+    argFolds = sorted([(len(argFolds[key]), argFolds[key], key) for key in argFolds])
     s += "Best arguments frequency"
-    for argFrequency in 
-    return s, argFrequency[0][0]
+    for argFold in argFolds:
+        s += str(argFold) + "\n"
+    return s, argFolds[0][2]
 
 def collect(inPath, numFolds, foldPattern, errors):
     #predictions = {"devel":[], "test":[]}
@@ -81,6 +79,7 @@ def collect(inPath, numFolds, foldPattern, errors):
                 assert filecmp(foldCAFAPath, chosenCAFAPath)
             else:
                 if os.path.exists(foldCAFAPath):
+                    print "Reading CAFA predictions for fold", i, "from", chosenCAFAPath
                     chosenCAFAPath = foldCAFAPath
                     with gzip.open(chosenCAFAPath, "rt") as f:
                         for line in f:

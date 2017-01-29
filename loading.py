@@ -155,6 +155,8 @@ def saveFeatureNames(names, outPath):
 def vectorizeExamples(examples, featureGroups):
     mlb = MultiLabelBinarizer()
     examples["labels"] = mlb.fit_transform(examples["labels"])
+    if examples["predictions"] != None:
+        examples["predictions"] = mlb.fit_transform(examples["predictions"])
     examples["label_names"] = mlb.classes_
     if "features" in examples:
         dv = DictVectorizer(sparse=True)

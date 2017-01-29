@@ -7,7 +7,7 @@ import evaluation
 
 def makeExamples(proteins, limitToSets):
     print "Converting proteins to examples"
-    examples = {"labels":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
+    examples = {"predictions":[], "labels":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     protObjs = [proteins[key] for key in protIds]
     for protein in protObjs:
@@ -23,6 +23,7 @@ def makeExamples(proteins, limitToSets):
                 examples["label_size"][label] = 0
             examples["label_size"][label] += 1
         examples["labels"].append(labels)
+        examples["predictions"].append(sorted(protein.get("predictions", {}).keys()))
         examples["ids"].append(protein["id"])
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
@@ -35,24 +36,24 @@ def loadPredictions(proteins, inPath):
         reader = csv.DictReader(f, delimiter='\t')
         protein = None
         counts = {"duplicates":0, "predicted":0, "protein-not-loaded":0}
-        skip = False
+        currentId = None
         for row in reader:
-            if protein == None or protein["id"] != row["id"]:
+            if currentId != row["id"]:
+                currentId = row["id"]
                 if row["id"] in proteins:
                     protein = proteins[row["id"]]
                     if "predictions" in protein:
                         counts["duplicates"] += 1
-                        skip = True
+                        protein = None
                     else:
-                        skip = False
                         counts["predicted"] += 1
                         protein["predictions"] = {}
                         assert "gold" not in protein
                         protein["gold"] = {}
                 else:
                     counts["protein-not-loaded"] += 1
-                    skip = True
-            if not skip:
+                    protein = None
+            if protein != None:
                 if row["predicted"] == "1":
                     protein["predictions"][row["label"]] = 1
                 elif row["gold"] == "1":
@@ -64,8 +65,8 @@ def evaluateFile(inPath, dataPath, setNames):
     proteins = defaultdict(lambda: dict())
     print "Loading Swissprot proteins"
     loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    print "Loading CAFA3 targets"
-    loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+    #print "Loading CAFA3 targets"
+    #loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
     #termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     #print "Unique terms:", len(termCounts)
@@ -75,7 +76,7 @@ def evaluateFile(inPath, dataPath, setNames):
     loadPredictions(proteins, inPath)
     examples = makeExamples(proteins, setNames)
     loading.vectorizeExamples(examples, None)
-    evaluation.evaluate(examples["labels"], examples["predicted"], examples, terms=None, averageOnly=True)
+    evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
 
 if __name__=="__main__":       
     from optparse import OptionParser

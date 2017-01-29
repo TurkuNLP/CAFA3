@@ -5,22 +5,43 @@ def onError(message, errors):
     if errors == "strict":
         raise Exception(message)
     else:
-        print message
+        print "WARNING: " + message
+
+def getFoldDirs(inPath, foldPattern, numFolds):
+    return [(i, os.path.join(inPath, foldPattern.replace("{NUMBER}", str(i)))) for i in range(numFolds)]        
 
 def collect(inPath, numFolds, foldPattern, errors):
-    predictions = {"devel":[], "test":[]}
-    seenIds = {"devel":set(), "test":set()}
+    #predictions = {"devel":[], "test":[]}
+    #seenIds = {"devel":set(), "test":set()}
     outFiles = {}
     for setName in ("devel", "test"):
         outFiles[setName] = gzip.open(os.path.join(inPath, setName + "allfolds-predicted.tsv.gz"))
-    for i in range(numFolds):
+    logLines = {i:{"cv":None, "command":None, "best_args":None, "avg_devel":None, "avg_test":None} for i in range(numFolds)}
+    patterns = {"cv":"Cross-validation sets", "command":"Command line:", "best_args":""}
+    for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
+        logPath = os.path.join(foldDir, "log.txt")
+        if not os.path.exists(logPath):
+            onError("Log file " + logPath + " not found", errors)
+            continue
+        with open(logPath, "rt") as f:
+            for line in f:
+                if line.
+        
+    for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
         foldDir = os.path.join(inPath, foldPattern.replace("{NUMBER}", str(i)))
+        print "Processing fold", i, foldDir
         if not os.path.exists(foldDir):
-            onError("Folder " + foldDir + " not found", errors)
+            onError("Directory " + foldDir + " not found", errors)
             continue
         for setName in ("devel", "test"):
             predPath = os.path.join(foldDir, setName + "-predictions.tsv.gz")
-            if not os.path.exists()
+            print "Reading predictions for fold", i, "from", predPath
+            if os.path.exists(predPath):
+                with gzip.open(predPath, "rt") as f:
+                    for line in f:
+                        outFiles[setName].write(line)
+            else:
+                onError("Result file '" + predPath + "' not found")
         
 
 def run(inPath, numFolds):

@@ -34,17 +34,30 @@ def loadPredictions(proteins, inPath):
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
         protein = None
+        counts = {"duplicates":0, "predicted":0, "protein-not-loaded":0}
+        skip = False
         for row in reader:
             if protein == None or protein["id"] != row["id"]:
-                protein = proteins[row["id"]]
-                assert "predictions" not in protein
-                protein["predictions"] = {}
-                assert "gold" not in protein
-                protein["gold"] = {}
-            if row["predicted"] == "1":
-                protein["predictions"][row["label"]] = 1
-            elif row["gold"] == "1":
-                protein["gold"][row["gold"]] = 1
+                if row["id"] in proteins:
+                    protein = proteins[row["id"]]
+                    if "predictions" in protein:
+                        counts["duplicates"] += 1
+                        skip = True
+                    else:
+                        skip = False
+                        counts["predicted"] += 1
+                        protein["predictions"] = {}
+                        assert "gold" not in protein
+                        protein["gold"] = {}
+                else:
+                    counts["protein-not-loaded"] += 1
+                    skip = True
+            if not skip:
+                if row["predicted"] == "1":
+                    protein["predictions"][row["label"]] = 1
+                elif row["gold"] == "1":
+                    protein["gold"][row["gold"]] = 1
+    print "Predictions loaded:", counts
 
 def evaluateFile(inPath, dataPath, setNames):
     print "==========", "Evaluating", "=========="
@@ -57,7 +70,7 @@ def evaluateFile(inPath, dataPath, setNames):
     #termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     #print "Unique terms:", len(termCounts)
     loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
-    loading.defineSets(proteins, "external")
+    loading.defineSets(proteins, "skip")
     
     loadPredictions(proteins, inPath)
     examples = makeExamples(proteins, setNames)

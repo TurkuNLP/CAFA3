@@ -153,10 +153,14 @@ def saveFeatureNames(names, outPath):
             f.write(str(i) + "\t" + names[i] + "\n")
     
 def vectorizeExamples(examples, featureGroups):
-    mlb = MultiLabelBinarizer()
-    examples["labels"] = mlb.fit_transform(examples["labels"])
+    mlb = MultiLabelBinarizer()  
     if examples["predictions"] != None:
-        examples["predictions"] = mlb.fit_transform(examples["predictions"])
+        numLabels = len(examples["labels"])
+        vector = mlb.fit_transform(examples["labels"] + examples["predictions"])
+        examples["labels"] = vector[:numLabels]
+        examples["predictions"] = vector[numLabels:]
+    else:
+        examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
     if "features" in examples:
         dv = DictVectorizer(sparse=True)

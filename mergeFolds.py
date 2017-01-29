@@ -59,7 +59,7 @@ def collect(inPath, numFolds, foldPattern, errors):
     print "Merging predictions"
     outFiles = {}
     for setName in ("devel", "test"):
-        outFiles[setName] = gzip.open(os.path.join(inPath, setName + "allfolds-predicted.tsv.gz"), "wt")        
+        outFiles[setName] = gzip.open(os.path.join(inPath, setName + "-allfolds-predicted.tsv.gz"), "wt")        
     chosenCAFAPath = None
     for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
         foldDir = os.path.join(inPath, foldPattern.replace("{NUMBER}", str(i)))
@@ -69,7 +69,7 @@ def collect(inPath, numFolds, foldPattern, errors):
             continue
         for setName in ("devel", "test"):
             predPath = os.path.join(foldDir, setName + "-predictions.tsv.gz")
-            print "Reading predictions for fold", i, "from", predPath
+            print "Reading", setName, "predictions for fold", i, "from", predPath
             if os.path.exists(predPath):
                 with gzip.open(predPath, "rt") as f:
                     for line in f:
@@ -80,11 +80,12 @@ def collect(inPath, numFolds, foldPattern, errors):
             foldCAFAPath = os.path.join(foldDir, "cafa-predictions.tsv.gz")
             if os.path.exists(foldCAFAPath):
                 if chosenCAFAPath != None and os.path.exists(chosenCAFAPath):
-                    print "Comparing", (foldCAFAPath, chosenCAFAPath)
-                    assert filecmp.cmp(foldCAFAPath, chosenCAFAPath)
+                    sizes = [os.path.getsize(x) for x in (foldCAFAPath, chosenCAFAPath)]
+                    print "Comparing", (foldCAFAPath, chosenCAFAPath), sizes
+                    assert sizes[0] == sizes[1]
                 else:
-                    print "Reading CAFA predictions for fold", i, "from", chosenCAFAPath
                     chosenCAFAPath = foldCAFAPath
+                    print "Reading CAFA predictions for fold", i, "from", chosenCAFAPath
                     with gzip.open(chosenCAFAPath, "rt") as f:
                         for line in f:
                             outFiles["test"].write(line)

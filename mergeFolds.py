@@ -30,7 +30,7 @@ def readLogs(inPath, foldPattern, numFolds, errors):
                         assert logLines[i][patternMatch[pattern]] == None
                         logLines[i][patternMatch[pattern]] = line.strip()
     s = ""
-    argFrequency = {}
+    argCounts = {}
     for i in range(numFolds):
         for pattern in patterns:
             s += "***", pattern, "***"
@@ -38,9 +38,10 @@ def readLogs(inPath, foldPattern, numFolds, errors):
         argLine = logLines[i]["best_args"]
         if argLine != None:
             argString = argLine.split("\t")[-1].strip()
-            if argString not in argFrequency:
-                argFrequency[argString] = 0
-            argFrequency[argString] += 1
+            if argString not in argCounts:
+                argCounts[argString] = {"count":0, "folds":[]}
+            argCounts[argString]["count"] += 1
+            argCounts[argString]["folds"] += 1
     freqs = sorted([(argFrequency[key], key) for key in argFrequency], reverse=True)
     maxHits = freqs[0]
     mostCommonArgs = max(argFrequency.iteritems(), key=operator.itemgetter(1))[0]
@@ -58,6 +59,7 @@ def collect(inPath, numFolds, foldPattern, errors):
     outFiles = {}
     for setName in ("devel", "test"):
         outFiles[setName] = gzip.open(os.path.join(inPath, setName + "allfolds-predicted.tsv.gz"), "wt")        
+    chosenCAFAPath = None
     for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
         foldDir = os.path.join(inPath, foldPattern.replace("{NUMBER}", str(i)))
         print "Processing fold", i, foldDir
@@ -75,11 +77,16 @@ def collect(inPath, numFolds, foldPattern, errors):
                 onError("Result file '" + predPath + "' not found")
         if i in mostCommonArgsFolds:
             foldCAFAPath = os.path.join(foldDir, "cafa-predictions.tsv.gz")
-            finalCAFAPath = os.path.join(inPath, "cafa-subset-bestargs-predicted.tsv.gz")
-            if os.path.exists(finalCAFAPath):
-                assert filecmp(foldCAFAPath, finalCAFAPath)
+            if os.path.exists(chosenCAFAPath):
+                assert filecmp(foldCAFAPath, chosenCAFAPath)
             else:
-                shutil.copy2(foldCAFAPath, finalCAFAPath)
+                if os.path.exists(foldCAFAPath):
+                    chosenCAFAPath = foldCAFAPath
+                    with gzip.open(chosenCAFAPath, "rt") as f:
+                        for line in f:
+                            outFiles["test"].write(line)
+                else:
+                    onError("Result file '" + foldCAFAPath + "' not found")
     for outFile in outFiles.values():
         outFile.close()
 

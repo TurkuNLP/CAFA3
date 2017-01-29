@@ -15,9 +15,8 @@ def getFoldDirs(inPath, foldPattern, numFolds):
 
 def readLogs(inPath, foldPattern, numFolds, errors):
     print "Reading log files"
-    patternMatch = {"Cross-validation sets":"cv", "Command line:":"command", "best_args":"DFG", "avg_devel":"SDF", "avg_test":"DF"}
-    patterns = sorted(patternMatch.keys())
-    logLines = {i:{key:None for key in patterns} for i in range(numFolds)} 
+    patterns = ["Cross-validation sets", "Command line:", "Best classifier arguments:", "Best development set results:"]
+    logLines = {i:{pattern:None for pattern in patterns + ["Test Average"]} for i in range(numFolds)} 
     for i, foldDir in getFoldDirs(inPath, foldPattern, numFolds):
         logPath = os.path.join(foldDir, "log.txt")
         if not os.path.exists(logPath):
@@ -27,15 +26,18 @@ def readLogs(inPath, foldPattern, numFolds, errors):
             for line in f:
                 for pattern in patterns:
                     if pattern in line:
-                        assert logLines[i][patternMatch[pattern]] == None
-                        logLines[i][patternMatch[pattern]] = line.strip()
+                        assert logLines[i][pattern] == None
+                        logLines[i][pattern] = line.strip()
+                if logLines[i]["Best development set results:"] != None and "Average:" in line and logLines[i]["Test Average"] == None:
+                    logLines[i]["Test Average"] = line.strip()
     s = ""
-    argFolds = []
-    for i in range(numFolds):
-        for pattern in patterns:
-            s += "***", pattern, "***"
+    for pattern in patterns:
+        for i in range(numFolds):
+            s += "*** " + pattern + " ***\n"
             s += str(i) + ":\t" + str(logLines[i]) + "\n"
-        argLine = logLines[i]["best_args"]
+    argFolds = {}
+    for i in range(numFolds):
+        argLine = logLines[i]["Best classifier arguments:"]
         if argLine != None:
             argString = argLine.split("\t")[-1].strip()
             if argString not in argFolds:

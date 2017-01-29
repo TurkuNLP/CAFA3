@@ -31,10 +31,10 @@ def readLogs(inPath, foldPattern, numFolds, errors):
                 if logLines[i]["Best development set results:"] != None and "Average:" in line and logLines[i]["Test Average"] == None:
                     logLines[i]["Test Average"] = line.strip()
     s = ""
-    for pattern in patterns:
+    for pattern in patterns + ["Test Average"]:
+        s += "*** " + pattern + " ***\n"
         for i in range(numFolds):
-            s += "*** " + pattern + " ***\n"
-            s += str(i) + ":\t" + str(logLines[i]) + "\n"
+            s += str(i) + ":\t" + (logLines[i][pattern] if logLines[i][pattern] != None else "NOT FOUND") + "\n"
     argFolds = {}
     for i in range(numFolds):
         argLine = logLines[i]["Best classifier arguments:"]
@@ -44,15 +44,16 @@ def readLogs(inPath, foldPattern, numFolds, errors):
                 argFolds[argString] = []
             argFolds[argString].append(i)
     argFolds = sorted([(len(argFolds[key]), argFolds[key], key) for key in argFolds])
-    s += "Best arguments frequency"
+    s += "Best arguments frequency\n"
     for argFold in argFolds:
         s += str(argFold) + "\n"
-    return s, argFolds[0][2]
+    return s, argFolds[0][1]
 
 def collect(inPath, numFolds, foldPattern, errors):
     #predictions = {"devel":[], "test":[]}
     #seenIds = {"devel":set(), "test":set()}
     logText, mostCommonArgsFolds = readLogs(inPath, foldPattern, numFolds, errors)
+    print "Most common arguments are for folds", mostCommonArgsFolds
     with open(os.path.join(inPath, "logs.txt"), "wt") as f:
         f.write(logText)
     print "Merging predictions"
@@ -77,17 +78,18 @@ def collect(inPath, numFolds, foldPattern, errors):
                 onError("Result file '" + predPath + "' not found")
         if i in mostCommonArgsFolds:
             foldCAFAPath = os.path.join(foldDir, "cafa-predictions.tsv.gz")
-            if os.path.exists(chosenCAFAPath):
-                assert filecmp(foldCAFAPath, chosenCAFAPath)
-            else:
-                if os.path.exists(foldCAFAPath):
+            if os.path.exists(foldCAFAPath):
+                if chosenCAFAPath != None and os.path.exists(chosenCAFAPath):
+                    print "Comparing", (foldCAFAPath, chosenCAFAPath)
+                    assert filecmp.cmp(foldCAFAPath, chosenCAFAPath)
+                else:
                     print "Reading CAFA predictions for fold", i, "from", chosenCAFAPath
                     chosenCAFAPath = foldCAFAPath
                     with gzip.open(chosenCAFAPath, "rt") as f:
                         for line in f:
                             outFiles["test"].write(line)
-                else:
-                    onError("Result file '" + foldCAFAPath + "' not found")
+            else:
+                onError("Result file '" + foldCAFAPath + "' not found")
     for outFile in outFiles.values():
         outFile.close()
 

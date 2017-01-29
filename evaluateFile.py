@@ -36,14 +36,15 @@ def loadPredictions(proteins, inPath):
         protein = None
         for row in reader:
             if protein == None or protein["id"] != row["id"]:
+                protein = proteins[row["id"]]
                 assert "predictions" not in protein
                 protein["predictions"] = {}
-                assert "terms" not in protein
-                protein["terms"] = {}
+                assert "gold" not in protein
+                protein["gold"] = {}
             if row["predicted"] == "1":
                 protein["predictions"][row["label"]] = 1
             elif row["gold"] == "1":
-                protein["terms"][row["gold"]] = "1"
+                protein["gold"][row["gold"]] = 1
 
 def evaluateFile(inPath, dataPath, setNames):
     print "==========", "Evaluating", "=========="
@@ -56,8 +57,9 @@ def evaluateFile(inPath, dataPath, setNames):
     #termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     #print "Unique terms:", len(termCounts)
     loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+    loading.defineSets(proteins, "external")
     
-    loadPredictions(inPath, proteins)
+    loadPredictions(proteins, inPath)
     examples = makeExamples(proteins, setNames)
     loading.vectorizeExamples(examples, None)
     evaluation.evaluate(examples["labels"], examples["predicted"], examples, terms=None, averageOnly=True)
@@ -71,4 +73,4 @@ if __name__=="__main__":
     (options, args) = optparser.parse_args()
     
     options.setNames = [x.strip() for x in options.setNames.split(",")]
-    evaluateFile(options.dataPath, options.output, options.setNames)
+    evaluateFile(options.input, options.dataPath, options.setNames)

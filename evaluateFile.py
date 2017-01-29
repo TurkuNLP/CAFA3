@@ -22,10 +22,13 @@ def makeExamples(proteins):
                 examples["label_size"][label] = 0
             examples["label_size"][label] += 1
         examples["labels"].append(labels)
-        examples["predictions"].append(sorted(protein.get("predictions", {}).keys()))
         examples["ids"].append(protein["id"])
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
+    for protein in protObjs:
+        examples["predictions"].append(sorted(protein.get("predictions", {}).keys()))
+        for pred in examples["predictions"][-1]:
+            assert pred in examples["label_size"], pred
     print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples"
     return examples
 
@@ -88,8 +91,8 @@ def evaluateFile(inPath, dataPath, setNames):
     
     loadPredictions(proteins, inPath, setNames)
     examples = makeExamples(proteins)
-    print "labels", examples["labels"][0:500]
-    print "predictions", examples["predictions"][0:500]
+    #print "labels", examples["labels"][0:500]
+    #print "predictions", examples["predictions"][0:500]
     loading.vectorizeExamples(examples, None)
     limitExamples(examples, setNames)
     evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)

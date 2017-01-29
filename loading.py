@@ -156,7 +156,7 @@ def vectorizeExamples(examples, featureGroups):
     mlb = MultiLabelBinarizer()  
     if examples["predictions"] != None:
         numLabels = len(examples["labels"])
-        vector = mlb.fit_transform(examples["labels"] + examples["predictions"])
+        vector = mlb.fit_transform(examples["labels"]) # + examples["predictions"])
         examples["labels"] = vector[:numLabels]
         examples["predictions"] = vector[numLabels:]
     else:

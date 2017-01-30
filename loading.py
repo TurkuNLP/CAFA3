@@ -78,7 +78,8 @@ def loadOBOTerms(inPath, onlyNames=False, forceNameSpace=None):
                 line = line.strip()
                 tag, content = [x.strip() for x in line.split(":", 1)]
                 term[tag] = content
-                if tag == "id":
+                if tag in ("id", "alt_id"):
+                    #assert content not in terms, (tag, content)
                     terms[content] = term
                 if tag == "namespace":
                     term["ns"] = "".join([x[0] for x in content.split("_")])

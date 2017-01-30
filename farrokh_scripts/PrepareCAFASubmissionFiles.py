@@ -1,12 +1,11 @@
 # example input parameters:
 #
-# -i /home/farmeh/Desktop/MY_ALL_PROJECTS/CAFA/CAFA3/PrepareSubmissionFiles/Results_Jari_Example/devel-predictions.tsv -o /home/farmeh/Desktop/MY_ALL_PROJECTS/CAFA/CAFA3/PrepareSubmissionFiles/ExampleSubmissionFolder/ -m 1 -l /home/farmeh/Desktop/MY_ALL_PROJECTS/CAFA/CAFA3/PrepareSubmissionFiles/ExampleSubmissionFolder/ -t TurkuBioNLP
-
+# -i /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/test-allfolds-predicted.tsv.gz -o /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/ -m 1 -l /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/
 
 TARGET_ORGANISMS = ["moon"] + [str(i) for i in [10090 , 10116 , 160488 , 170187 , 208963 , 223283 , 224308 , 237561 , 243232 , 243273, 273057 ,284812, 321314, 3702 , 44689 , 559292 , 7227 , 7955 , 83333 , 8355 , 85962 , 9606 , 99287]] 
 PARAM_KEYWORDS   = "sequence alignment, sequence-profile alignment, profile-profile alignment" + "." 
 
-import shutil , datetime , argparse , gzip
+import shutil , datetime , argparse , gzip , csv
 import MySQLdb as mdb 
 
 ErrLogFileHandler = None 
@@ -65,7 +64,7 @@ def func_db_GetUniprot_Info (UniprotID , EVEXDBcon):
 
 def func_openInputFile (InputFileAddress):
     try:    
-        FileExtention = InputFileAddress.split("/")[-1].split(".")[1].lower()
+        FileExtention = InputFileAddress.rsplit(".", 1)[-1].lower()
         if FileExtention in ("tsv" , "txt"):
             return open(InputFileAddress , "rt")
         elif FileExtention == "gz":
@@ -97,10 +96,8 @@ if __name__== "__main__":
     parser.add_argument("-o", "--outputDir"  , help= "output folder absolute address") 
     parser.add_argument("-m", "--modelNumber", help= "Should be 1, 2, or 3")
     parser.add_argument("-l", "--logDir"     , help= "logfile folder absolute address"   , default=CurrentExecutionFolder)
-    parser.add_argument("-t", "--teamName"   , help= "name of the team"                  , default="EVEX") 
-    parser.add_argument("-s", "--skipFirstLine", help = "Should I Skip first line of input file." , default="False")
+    parser.add_argument("-t", "--teamName"   , help= "name of the team"                  , default="TurkuBioNLP1") 
     args = parser.parse_args()
-
     
     if (args.inputFile == None) or (not(func_os_FileExists (args.inputFile))):
         func_EXIT ("Invalid input file:" + str(args.inputFile)) 
@@ -114,17 +111,10 @@ if __name__== "__main__":
     if (not func_is_number(args.modelNumber)) or (not int(args.modelNumber) in (1,2,3)):
         func_EXIT ("Model number argument should be either 1, 2 or 3. Now it is:" + str(args.modelNumber)) 
     
-    #Jari writes column names into his files. That must be skipped ... 
-    if not str(args.skipFirstLine).lower() in ("true" , "false"):
-        func_EXIT ("skipFirstLine argument should be either true or false.")
-    if args.skipFirstLine.lower() == "true":
-        args.skipFirstLine = True
-    else:
-        args.skipFirstLine = False 
-    
     if args.outputDir[-1] <> "/": args.outputDir+="/" ;
     if args.logDir[-1]    <> "/": args.logDir   +="/" ;
 
+    print "\n\n\n" 
     print "1) Connecting to EVEXDB ..." 
     EVEXDBcon = func_db_connectToEVEXDB  ('evex.utu.fi','evex_write' , 'EVEXopensesame156', 'CAFA3');
     print "Done.\n" 
@@ -156,48 +146,77 @@ if __name__== "__main__":
     print "Done.\n" 
     
     print "6) Writing prediction outputs ..." ; 
-    if args.skipFirstLine:
-        INPUT_FileHandler.readline() 
         
     cnt = 0 
-    for line in INPUT_FileHandler:
+    csv_reader = csv.DictReader(INPUT_FileHandler, delimiter='\t')
+    Last = {"UniProtID": None , "Info": None }
+    
+    for row in csv_reader:
         cnt+= 1 
-        if cnt == 4000:
-            break ;
+        if cnt%10000 == 0:
+            print "row processed:" , cnt 
 
-        if args.skipFirstLine and (cnt==1):
+        UniProtID         = row["id"]
+        PredicatedGoTerm  = row["label"]
+        ConfidenceScore   = float(row["confidence"])
+        IsPositivePred    = int  (row["predicted"]) == 1
+        Internal_cafa_ids = None if len(row["cafa_ids"])==0 else set(row["cafa_ids"].split(","))
+        
+        if not IsPositivePred:
             continue ; 
         
-        origline = line 
-        line = line.split("\n")[0].split("\t") 
-        UniProtID , PredicatedGoTerm , ConfidenceScore = line[0] , line[1] , line[2]
-        
-        Info = func_db_GetUniprot_Info (UniProtID , EVEXDBcon)
-        if len (Info) == 0:
-            Errlog ("Unknown UniProtID :" + UniProtID)
-            continue 
-
-        #The score must be in the interval (0.00, 1.00] and contain two significant figures. A score of 0.00 is not allowed        
-        if (float(ConfidenceScore) <= 0) or (float(ConfidenceScore) > 1):
-            print ConfidenceScore 
-            Errlog ("Invalid Confidence Score. Should be in the interval (0.00, 1.00]. Info: " + origline.split("\n")[0])
+        if (ConfidenceScore <= 0) or (ConfidenceScore > 1):
+            Errlog ("Invalid Confidence Score. Should be in the interval (0.00, 1.00]. Info: " + str(row))
             continue
+
+        if UniProtID == Last["UniProtID"]:
+            Info = Last["Info"]
+        else:
+            Info = func_db_GetUniprot_Info (UniProtID , EVEXDBcon)
+            Last["UniProtID"] = UniProtID
+            Last["Info"] = Info 
+            
+        if len (Info) == 0: #information is not found in DB. 
+            if Internal_cafa_ids == None: #No info in DB, no info in file. That's not CAFA Target, skip
+                continue 
+            else:#No info in DB, but CAFA id in File 
+                Errlog ("Unknown CAFA TargetID (Defined in file, not in MySQL): " + row["cafa_ids"]) 
+                continue 
+        else: #info is in the DB, let's check if CAFA id in DB and file agree together... 
+            DB_cafa_ids = set(i[0] for i in Info)
+
+            if len(Internal_cafa_ids - DB_cafa_ids):
+                Errlog ("cafa_id in FILE, but not in DB :" + str(Internal_cafa_ids - DB_cafa_ids))
+                continue 
+            
+            if len(DB_cafa_ids - Internal_cafa_ids):
+                Errlog ("cafa_id in DB, but not in FILE :" + str(Internal_cafa_ids - DB_cafa_ids))
+                continue 
         
-        print UniProtID , PredicatedGoTerm , ConfidenceScore  
         for record in Info:
             CAFA_id , ncbitax_id = record[0] , record[1] 
             if CAFA_id[0] == "M":
                 ORG_TYPE = "moon" 
             else:
-                ORG_TYPE = ncbitax_id 
-            
+                ORG_TYPE = str(ncbitax_id) #change to STR ... by default it is Long int
 
             if not ORG_TYPE in ALL_FILES:
-                Errlog ("Prediction not among CAFA targets. Info: " + origline.split("\n")[0])
+                Errlog ("Prediction not among CAFA targets. Info: " + ORG_TYPE + "     " + str(row))
                 continue
                 
             ALL_FILES[ORG_TYPE].write (CAFA_id + "\t" + PredicatedGoTerm + "\t" + '%.2f' % ConfidenceScore + "\n") 
-            
+            #print CAFA_id , ORG_TYPE , PredicatedGoTerm , ConfidenceScore 
+    
+    print "row processed:" , cnt      
+    print "-------------------------------------------------" 
+    print "CHECK LOG FILE TO SEE IF THERE IS ANY ERRORS!" ; 
+    print "log:" + ErrLogFileAddress
+    print "-------------------------------------------------" 
+
+    # find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;
+    shutil.os.chdir (OUTPUT_FOLDER) 
+    shutil.os.system ("find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;") 
+    
     print "EXITING PROGRAM..." 
     INPUT_FileHandler.close ()
     for FileHandler in ALL_FILES:

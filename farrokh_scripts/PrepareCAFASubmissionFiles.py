@@ -96,7 +96,7 @@ if __name__== "__main__":
     parser.add_argument("-o", "--outputDir"  , help= "output folder absolute address") 
     parser.add_argument("-m", "--modelNumber", help= "Should be 1, 2, or 3")
     parser.add_argument("-l", "--logDir"     , help= "logfile folder absolute address"   , default=CurrentExecutionFolder)
-    parser.add_argument("-t", "--teamName"   , help= "name of the team"                  , default="EVEX") 
+    parser.add_argument("-t", "--teamName"   , help= "name of the team"                  , default="TurkuBioNLP1") 
     args = parser.parse_args()
     
     if (args.inputFile == None) or (not(func_os_FileExists (args.inputFile))):

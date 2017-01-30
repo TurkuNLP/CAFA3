@@ -24,13 +24,11 @@ char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 use_features = True # False = only sequence is used for prediction
 model_dir = './model/' # path for saving model + other required stuff
 
-# TODO: Save model + other needed files after training: model, go_id mapping, blast id map, json_vectorizer etc.
-# TODO: Get prediction statistics
-# TODO: Word dropout?
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
 # TODO: Make predictions for test + cafa targets
-# TODO: Check that we are using Jari's feature json correctly
-
+# TODO: Save model + other needed files after training: model, go_id mapping, blast id map, json_vectorizer, feature_selector etc.
+# TODO: Get prediction statistics
+# TODO: Word dropout?
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -81,7 +79,7 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
     
     if split_path:
         split_ids = read_split_ids(split_path)
-    
+    import random
     while True:
         prot_ids = []
         x = []
@@ -152,15 +150,38 @@ def read_feature_json(path='./data/examples.json.gz'):
     print 'Reading Jaris feature data'
     js = json.load(gzip.open(path))
     
+    filters = ['DUMMY']#['BLAST', 'DELTA', 'GPI', 'TAX', 'IPS']
+    print "Excluding: ", filters
+    for i, d in enumerate(js['features']):
+        if i % 10000 == 0:
+            print i
+        for f in filters:
+            for key in d.keys():
+                if key.startswith('%s:' % f):
+                    d.pop(key)
+    
+    
     from sklearn.feature_extraction import DictVectorizer
     v = DictVectorizer()
     feature_matrix = v.fit_transform(js['features'])
     
     id_map = {pid: i for i, pid in enumerate(js['ids'])}
-    #import pdb; pdb.set_trace()
-    return feature_matrix, id_map, v
     
-json_feature_matrix, json_id_map, json_vectorizer = read_feature_json()
+    from sklearn import preprocessing
+    scaler = preprocessing.MaxAbsScaler().fit(feature_matrix)
+    std_matrix = scaler.transform(feature_matrix)
+    
+    from sklearn.feature_selection import VarianceThreshold
+    #import pdb; pdb.set_trace()
+    vt = VarianceThreshold(0.0005).fit(std_matrix)
+    
+    better_matrix = vt.transform(std_matrix)
+    #good_features = np.array(v.feature_names_)[np.where(vt.transform(std_matrix)==True)]
+    
+    
+    return better_matrix, id_map, v, vt
+    
+json_feature_matrix, json_id_map, json_vectorizer, feature_selector = read_feature_json()
 
 def get_feature_vector(prot_id):
     prot_index = json_id_map[prot_id]
@@ -193,8 +214,8 @@ def generate_blast_data():
     
     return blast_dict, blast_hit_ids
 
-if use_features:
-    blast_dict, blast_hit_ids = generate_blast_data()
+#if use_features:
+#    blast_dict, blast_hit_ids = generate_blast_data()
 
 def generate_blast_features(prot_id):
     
@@ -227,8 +248,8 @@ def train():
     train_size = _data_size('./data/train.txt.gz')
     devel_data = generate_data('./data/devel.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
     devel_size = _data_size('./data/devel.txt.gz')
-    #test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
-    #test_size = _data_size('./data/test.txt.gz')
+    test_data = generate_data('./data/test.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    test_size = _data_size('./data/test.txt.gz')
     
     #print "Making baseline predictions"
     #import baseline
@@ -276,8 +297,8 @@ def train():
     
     if use_features:
         #feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
-        feature_input = Input(shape=(len(json_vectorizer.feature_names_ ), ), name='features') # For Jari's feature vectors
-        feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
+        feature_input = Input(shape=(json_feature_matrix.shape[1], ), name='features') # For Jari's feature vectors
+        feature_encoding = Dense(1000, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
         convs.append(feature_encoding)
         input_list.append(feature_input)
     #
@@ -291,13 +312,23 @@ def train():
     print model.summary()
     
     print 'Training model'
-    es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=1, mode='max')
-    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', save_best_only=True,verbose=1)
+    es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=0, mode='max')
+    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', save_best_only=True,verbose=0)
     #model.fit(pretrain_data, pretrain_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
     model.fit_generator(train_data, samples_per_epoch=train_size, nb_epoch=100, validation_data=devel_data, nb_val_samples=devel_size, callbacks=[es_cb, cp_cb])
-
-        
+    
     import pdb; pdb.set_trace()
+    
+    from keras.models import load_model
+    model = load_model(filepath=os.path.join(model_dir, 'model.hdf5'))
+    
+    test_score = model.evaluate_generator(test_data, test_size)
+    test_pred = model.predict_generator(test_data, test_size)
+    # TODO: Save aux tools
+    # TODO: Make predictions for CAFA targets
+    
+    
+
     
 def weighted_binary_crossentropy(target, output):
     from keras.backend.common import _EPSILON

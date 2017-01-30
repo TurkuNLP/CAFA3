@@ -158,7 +158,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     assert cafaTargets in ("skip", "overlap", "separate", "external")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
     if useHPO:
-        terms = loading.loadOBOTerms(os.path.join(options.dataPath, "HPO", "ontology", "hp.obo"), onlyNames=True)
+        terms = loading.loadOBOTerms(os.path.join(options.dataPath, "HPO", "ontology", "hp.obo"), onlyNames=True, forceNameSpace="obo")
     else:
         terms = loading.loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
@@ -182,7 +182,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         print "Using", len(topTerms), "most common GO terms"
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
-        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=useHPO)
         if fold != None:
             makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz"))
         loading.defineSets(proteins, cafaTargets, fold=fold)

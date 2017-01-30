@@ -25,8 +25,7 @@ def loadAnnotations(inPath, proteins):
 
 def removeNonHuman(proteins):
     counts = {"kept":0, "removed":0}
-    for protein in proteins:
-        protId = protein["id"]
+    for protId in proteins.keys():
         if not protId.endswith("_HUMAN"):
             del proteins[protId]
             counts["removed"] += 1
@@ -65,7 +64,7 @@ def loadGOTerms(inPath):
             terms[row["id"]] = row
     return terms
 
-def loadOBOTerms(inPath, onlyNames=False):
+def loadOBOTerms(inPath, onlyNames=False, forceNameSpace=None):
     print "Reading OBO ontology from", inPath
     terms = {}
     with open(inPath, "rt") as f:
@@ -83,8 +82,11 @@ def loadOBOTerms(inPath, onlyNames=False):
                     terms[content] = term
                 if tag == "namespace":
                     term["ns"] = "".join([x[0] for x in content.split("_")])
-    if onlyNames:
-        terms = {key:terms[key]["name"] for key in terms}
+    if forceNameSpace != None:
+        for term in terms.values():
+            term["ns"] = forceNameSpace
+    #if onlyNames:
+    #    terms = {key:terms[key]["name"] for key in terms}
     return terms
 
 def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, verbose=False, counts=None):
@@ -148,16 +150,23 @@ def loadFASTA(inPath, proteins, cafaHeader=False):
             #print seq.id, seq.seq
     print dict(counts)
 
-def loadSplit(inPath, proteins):
+def loadSplit(inPath, proteins, allowMissing=False):
     print "Loading split from", inPath
+    counts = defaultdict(int)
     for dataset in ("train", "devel", "test"):
         filePath = os.path.join(inPath, dataset + ".txt.gz")
         assert os.path.exists(filePath), filePath
         with gzip.open(filePath, "rt") as f:
             for line in f:
                 protId = line.strip()
-                assert protId in proteins
-                proteins[protId]["split"] = dataset
+                if not allowMissing:
+                    assert protId in proteins
+                if protId in proteins:
+                    proteins[protId]["split"] = dataset
+                    counts[dataset + "-match"] += 1
+                else:
+                    counts[dataset + "-missing"] += 1
+    print "Loaded split:", dict(counts)
 
 def defineFoldSets(fold, numFolds=10, numDevel=2):
     print "Defining train/devel/test split for", str(numFolds) + "-fold cross-validation fold number", fold

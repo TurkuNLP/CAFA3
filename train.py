@@ -6,6 +6,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 
 import os
 import gzip
+import json
 import numpy as np
 np.random.seed(1337)
 import codecs
@@ -16,18 +17,19 @@ from stats import pairwise
 
 timesteps = 2500 # maximum length of a sequence, the real max is 35K. 2.5K covers 99% of the sequences, 5K 99.9%
 latent_dim = 50 # Amino acid embedding size
+batch_size = 16
 char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
-use_features = False # False = only sequence is used for prediction
+use_features = True # False = only sequence is used for prediction
 model_dir = './model/' # path for saving model + other required stuff
 
-# TODO: Save model + other needed files after training: model, go_id mapping, blast id map
-# TODO: Add normal features
+# TODO: Save model + other needed files after training: model, go_id mapping, blast id map, json_vectorizer etc.
 # TODO: Get prediction statistics
 # TODO: Word dropout?
 # FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
 # TODO: Make predictions for test + cafa targets
+# TODO: Check that we are using Jari's feature json correctly
 
 
 def get_annotation_ids(annotation_path, top=None):
@@ -94,15 +96,16 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
                 continue
             prot_ids.append(prot_id)
             seq = seq.strip()
-            #seq_id_list = [char_dict[s] for s in seq]
-            seq_id_list = [aa_index_ids.get(s, 0) for s in seq]
+            seq_id_list = [char_dict[s] for s in seq]
+            #seq_id_list = [aa_index_ids.get(s, 0) for s in seq]
             annotations = ann_dict[prot_id]
             ann_id_list = [ann_ids[a] for a in annotations if a in ann_ids]
             y_v = np.zeros((len(ann_ids)), dtype='int')
             y_v[ann_id_list] = 1
             x.append(seq_id_list)
             if use_features:
-                blast_x.append(generate_blast_features(prot_id))
+                #blast_x.append(generate_blast_features(prot_id)) # These are our original blast features
+                blast_x.append(get_feature_vector(prot_id)) # Jari's feature vectors
             y.append(y_v)
         
             if len(prot_ids) == batch_size:
@@ -144,6 +147,25 @@ def read_aaindex():
     return aa_index_ids, embedding
 
 aa_index_ids, aa_embedding = read_aaindex()
+
+def read_feature_json(path='./data/examples.json.gz'):
+    print 'Reading Jaris feature data'
+    js = json.load(gzip.open(path))
+    
+    from sklearn.feature_extraction import DictVectorizer
+    v = DictVectorizer()
+    feature_matrix = v.fit_transform(js['features'])
+    
+    id_map = {pid: i for i, pid in enumerate(js['ids'])}
+    #import pdb; pdb.set_trace()
+    return feature_matrix, id_map, v
+    
+json_feature_matrix, json_id_map, json_vectorizer = read_feature_json()
+
+def get_feature_vector(prot_id):
+    prot_index = json_id_map[prot_id]
+    feature_vector = json_feature_matrix[prot_index]
+    return feature_vector.toarray()[0]
 
 def generate_blast_data():
     """
@@ -198,7 +220,7 @@ def train():
     print 'Generating training data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
     ann_ids, reverse_ann_ids = get_annotation_ids(ann_path, top=4000)
-    batch_size=16
+
     #pretrain_data = generate_data(None, '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz', '/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ann-train-data.tsv.gz', ann_ids, 256)
     #pretrain_size = _data_size('/home/hanmoe/CAFA3/ngrams/4kai/assocI-min_len5-min_freq3-top_fun5k/ngram-id2seq.tsv.gz')/2
     train_data = generate_data('./data/train.txt.gz', './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
@@ -222,8 +244,8 @@ def train():
     print 'Building model'
     inputs = Input(shape=(timesteps, ), name='sequence')
     input_list = [inputs]
-    #embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
-    embedding = Embedding(aa_embedding.shape[0], aa_embedding.shape[1], mask_zero=False, weights=[aa_embedding], trainable=True)(inputs)
+    embedding = Embedding(vocab_size, latent_dim, mask_zero=False)(inputs)
+    #embedding = Embedding(aa_embedding.shape[0], aa_embedding.shape[1], mask_zero=False, weights=[aa_embedding], trainable=True)(inputs)
     #mask = Masking()(embedding)
     
     convs = []
@@ -253,7 +275,8 @@ def train():
         #convs.append(att)
     
     if use_features:
-        feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
+        #feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
+        feature_input = Input(shape=(len(json_vectorizer.feature_names_ ), ), name='features') # For Jari's feature vectors
         feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
         convs.append(feature_encoding)
         input_list.append(feature_input)

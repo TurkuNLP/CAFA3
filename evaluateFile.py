@@ -98,7 +98,7 @@ def evaluateFile(inPath, dataPath, setNames):
     loading.vectorizeExamples(examples, None)
     limitExamples(examples, setNames)
     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
-    print "Best development set results:", evaluation.metricsToString(results["average"])
+    print setNames, "average:", evaluation.metricsToString(results["average"])
 
 if __name__=="__main__":       
     from optparse import OptionParser

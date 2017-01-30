@@ -154,7 +154,7 @@ def saveFeatureNames(names, outPath):
     
 def vectorizeExamples(examples, featureGroups):
     mlb = MultiLabelBinarizer()  
-    if examples["predictions"] != None:
+    if "predictions" in examples and examples["predictions"] != None:
         #examples["labels"] = mlb.fit_transform(examples["labels"])
         #examples["predictions"] = examples["labels"]
         numLabels = len(examples["labels"])

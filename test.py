@@ -142,7 +142,9 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, negatives=False, singleLabelJobs=None):
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
+        limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
+        negatives=False, singleLabelJobs=None, useHPO=False):
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -155,7 +157,10 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             assert action in ("build", "classify", "statistics")
     assert cafaTargets in ("skip", "overlap", "separate", "external")
     #loadUniprotSimilarity(os.path.join(options.dataPath, "Uniprot", "similar.txt"), proteins)
-    terms = loading.loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
+    if useHPO:
+        terms = loading.loadOBOTerms(os.path.join(options.dataPath, "HPO", "ontology", "hp.obo"), onlyNames=True)
+    else:
+        terms = loading.loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     
     exampleFilePath = os.path.join(outDir, "examples.json.gz")
     examples = None
@@ -167,7 +172,10 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             print "Loading CAFA3 targets"
             loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
-        termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
+        if useHPO:
+            termCounts = loading.loadHPOAnnotations(os.path.join(options.dataPath, "HPO", "annotation", "all_cafa_annotation_propagated.tsv.gz"), proteins)
+        else:
+            termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
         print "Using", len(topTerms), "most common GO terms"
@@ -229,6 +237,7 @@ if __name__=="__main__":
     optparser.add_option("--targets", default="skip", help="How to include the CAFA target proteins, one of 'skip', 'overlap' or 'separate'")
     optparser.add_option("--negatives", default=False, action="store_true", help="Write negative predictions in the result files")
     optparser.add_option("--fold", default=None, type=int)
+    optparser.add_option("--humanProteinOntology", default=False, action="store_true")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
@@ -242,4 +251,4 @@ if __name__=="__main__":
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
         cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 
-        singleLabelJobs=options.singleLabelJobs)
+        singleLabelJobs=options.singleLabelJobs, useHPO=options.humanProteinOntology)

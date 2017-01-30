@@ -23,6 +23,20 @@ def loadAnnotations(inPath, proteins):
             counts[goTerm] += 1
     return counts
 
+def loadHPOAnnotations(inPath, proteins):
+    print "Loading HPO annotations from", inPath
+    counts = defaultdict(int)
+    with gzip.open(inPath, "rt") as f:
+        tsv = csv.reader(f, ["term_id", "prot_id"], delimiter='\t')
+        for row in tsv:
+            protein = proteins[row["prot_id"]]
+            if "terms" not in protein:
+                protein["terms"] = {}
+            term = row["term_id"]
+            protein["terms"][term] = "N/A"
+            counts[term] += 1
+    return counts
+
 def loadGOTerms(inPath):
     print "Loading GO terms from", inPath
     terms = {}
@@ -32,6 +46,28 @@ def loadGOTerms(inPath):
             #print row
             assert row["id"] not in terms
             terms[row["id"]] = row
+    return terms
+
+def loadOBOTerms(inPath, onlyNames=False):
+    print "Reading OBO ontology from", inPath
+    terms = {}
+    with open(inPath, "rt") as f:
+        term = None
+        for line in f:
+            if line.startswith("["):
+                term = None
+                if line.startswith("[Term]"):
+                    term = {}
+            elif term != None and ":" in line:
+                line = line.strip()
+                tag, content = [x.strip() for x in line.split(":", 1)]
+                term[tag] = content
+                if tag == "id":
+                    terms[content] = term
+                if tag == "namespace":
+                    term["ns"] = "".join([x[0] for x in content.split("_")])
+    if onlyNames:
+        terms = {key:terms[key]["name"] for key in terms}
     return terms
 
 def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, verbose=False, counts=None):

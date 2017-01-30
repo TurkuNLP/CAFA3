@@ -182,17 +182,27 @@ def defineFoldSets(fold, numFolds=10, numDevel=2):
     print "Cross-validation sets:", ",".join([str(x) + ":" + foldSets[x] for x in sorted(foldSets.keys())])
     return foldSets
 
-def defineSets(proteins, cafaTargets, fold=None):
+def defineSets(proteins, cafaTargets, fold=None, limitTrainingToAnnotated=True):
     counts = defaultdict(int)
+    filtered = defaultdict(int)
     if fold != None:
         foldSets = defineFoldSets(fold)
-    for protein in proteins.values():
+    for protId in proteins.keys():
+        protein = proteins[protId]
         assert "id" in protein, protein
         cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
         if fold != None:
             splitSet = [foldSets[protein["fold"]]] if protein.get("fold") != None else []
         else:
             splitSet = [protein["split"]] if protein.get("split") != None else []
+        if limitTrainingToAnnotated and len(protein["terms"]) == 0:
+            for s in splitSet:
+                filtered[s] += 1
+            splitSet = []
+            if cafaSet == []: # If a protein has no terms and is not a CAFA target it is removed 
+                del proteins[protId]
+                filtered["deleted"] += 1
+                continue
         if len(cafaSet) > 0:
             if cafaTargets == "overlap":
                 protein["sets"] = cafaSet + splitSet
@@ -210,7 +220,7 @@ def defineSets(proteins, cafaTargets, fold=None):
         assert len(protein["sets"]) > 0
         category = ",".join(cafaSet + splitSet) + "=>" + ",".join(protein["sets"])
         counts[category] += 1
-    print "Defined sets:", dict(counts)
+    print "Defined sets:", dict(counts), "Filtered:", dict(filtered)
 
 def saveFeatureNames(names, outPath):
     print "Saving feature names to", outPath

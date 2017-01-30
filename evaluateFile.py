@@ -6,7 +6,7 @@ import csv
 import evaluation
 import operator
 
-def makeExamples(proteins):
+def makeExamples(proteins, limitTerms):
     print "Converting proteins to examples"
     examples = {"predictions":[], "labels":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
@@ -15,8 +15,8 @@ def makeExamples(proteins):
         # Build labels
         labels = protein["terms"].keys()
         labels = sorted(labels)
-        #if len(labels) == 0:
-        #    labels = ["no_annotations"]
+        if limitTerms:
+            labels = [x for x in labels if x in limitTerms]
         for label in labels:
             if label not in examples["label_size"]:
                 examples["label_size"][label] = 0
@@ -27,16 +27,18 @@ def makeExamples(proteins):
         examples["sets"].append(protein["sets"])
     for protein in protObjs:
         examples["predictions"].append(sorted(protein.get("predictions", {}).keys()))
-        for pred in examples["predictions"][-1]:
-            assert pred in examples["label_size"], pred
+        #for pred in examples["predictions"][-1]:
+        #    assert pred in examples["label_size"], pred
     print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples"
     return examples
 
 def limitExamples(examples, limitToSets):
     indices = [i for i in range(len(examples["sets"])) if any(x in limitToSets for x in examples["sets"][i])]
     print "Limiting", len(examples["labels"]), "to", len(indices)
-    for key in ("labels", "predictions", "ids", "cafa_ids", "sets"):
+    for key in ("ids", "cafa_ids", "sets"):
         examples[key] = [examples[key][i] for i in indices]
+    for key in ("labels", "predictions"):
+        examples[key] = examples[key][indices]
 
 def loadPredictions(proteins, inPath, limitToSets):
     print "Loading predictions from", inPath
@@ -90,12 +92,13 @@ def evaluateFile(inPath, dataPath, setNames):
     loading.defineSets(proteins, "skip")
     
     loadPredictions(proteins, inPath, setNames)
-    examples = makeExamples(proteins)
+    examples = makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]))
     #print "labels", examples["labels"][0:500]
     #print "predictions", examples["predictions"][0:500]
     loading.vectorizeExamples(examples, None)
     limitExamples(examples, setNames)
-    evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    print "Best development set results:", evaluation.metricsToString(results["average"])
 
 if __name__=="__main__":       
     from optparse import OptionParser

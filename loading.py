@@ -23,18 +23,35 @@ def loadAnnotations(inPath, proteins):
             counts[goTerm] += 1
     return counts
 
+def removeNonHuman(proteins):
+    counts = {"kept":0, "removed":0}
+    for protein in proteins:
+        protId = protein["id"]
+        if not protId.endswith("_HUMAN"):
+            del proteins[protId]
+            counts["removed"] += 1
+        else:
+            counts["kept"] += 1
+    print "Removed non-human proteins:", counts
+
 def loadHPOAnnotations(inPath, proteins):
     print "Loading HPO annotations from", inPath
     counts = defaultdict(int)
+    stats = {"missing":set(), "match":set()}
     with gzip.open(inPath, "rt") as f:
-        tsv = csv.reader(f, ["term_id", "prot_id"], delimiter='\t')
+        tsv = csv.reader(f, delimiter='\t')
         for row in tsv:
-            protein = proteins[row["prot_id"]]
+            termId, protId = row
+            if protId not in proteins:
+                stats["missing"].add(protId)
+                continue
+            stats["match"].add(protId)
+            protein = proteins[protId]
             if "terms" not in protein:
                 protein["terms"] = {}
-            term = row["term_id"]
-            protein["terms"][term] = "N/A"
-            counts[term] += 1
+            protein["terms"][termId] = "N/A"
+            counts[termId] += 1
+    print "Loaded HPO annotations:", {key:len(stats[key]) for key in stats}
     return counts
 
 def loadGOTerms(inPath):
@@ -73,6 +90,7 @@ def loadOBOTerms(inPath, onlyNames=False):
 def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, verbose=False, counts=None):
     assert len(sequence) > 0
     if protId not in proteins:
+        proteins[protId] = {}
         proteins[protId]["seq"] = sequence
         proteins[protId]["id"] = protId
         proteins[protId]["cafa_ids"] = [cafaId] if cafaId else []
@@ -99,6 +117,7 @@ def addProtein(proteins, protId, cafaId, sequence, filename, replaceSeq=False, v
                 proteins[protId]["cafa_ids"].append(cafaId)
             else:
                 proteins[protId]["cafa_ids"] += [cafaId]
+    assert "id" in proteins[protId], (protId, cafaId, proteins[protId])
          
 def loadFASTA(inPath, proteins, cafaHeader=False):
     print "Loading sequences from", inPath
@@ -130,6 +149,7 @@ def loadFASTA(inPath, proteins, cafaHeader=False):
     print dict(counts)
 
 def loadSplit(inPath, proteins):
+    print "Loading split from", inPath
     for dataset in ("train", "devel", "test"):
         filePath = os.path.join(inPath, dataset + ".txt.gz")
         assert os.path.exists(filePath), filePath
@@ -157,6 +177,7 @@ def defineSets(proteins, cafaTargets, fold=None):
     if fold != None:
         foldSets = defineFoldSets(fold)
     for protein in proteins.values():
+        assert "id" in protein, protein
         cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
         if fold != None:
             splitSet = [foldSets[protein["fold"]]] if protein.get("fold") != None else []

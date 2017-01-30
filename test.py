@@ -166,13 +166,14 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     examples = None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
-        proteins = defaultdict(lambda: dict())
+        proteins = {} #defaultdict(lambda: dict())
         loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
             print "Loading CAFA3 targets"
             loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
         if useHPO:
+            loading.removeNonHuman(proteins)
             termCounts = loading.loadHPOAnnotations(os.path.join(options.dataPath, "HPO", "annotation", "all_cafa_annotation_propagated.tsv.gz"), proteins)
         else:
             termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)

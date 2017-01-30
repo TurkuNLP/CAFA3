@@ -212,6 +212,11 @@ if __name__== "__main__":
     print "CHECK LOG FILE TO SEE IF THERE IS ANY ERRORS!" ; 
     print "log:" + ErrLogFileAddress
     print "-------------------------------------------------" 
+
+    # find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;
+    shutil.os.chdir (OUTPUT_FOLDER) 
+    shutil.os.system ("find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;") 
+    
     print "EXITING PROGRAM..." 
     INPUT_FileHandler.close ()
     for FileHandler in ALL_FILES:

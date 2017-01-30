@@ -206,7 +206,12 @@ if __name__== "__main__":
                 
             ALL_FILES[ORG_TYPE].write (CAFA_id + "\t" + PredicatedGoTerm + "\t" + '%.2f' % ConfidenceScore + "\n") 
             #print CAFA_id , ORG_TYPE , PredicatedGoTerm , ConfidenceScore 
-         
+    
+    print "row processed:" , cnt      
+    print "-------------------------------------------------" 
+    print "CHECK LOG FILE TO SEE IF THERE IS ANY ERRORS!" ; 
+    print "log:" + ErrLogFileAddress
+    print "-------------------------------------------------" 
     print "EXITING PROGRAM..." 
     INPUT_FileHandler.close ()
     for FileHandler in ALL_FILES:

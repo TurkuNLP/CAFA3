@@ -177,6 +177,12 @@ def evaluatePerformance(labels, predictions, results, title, tag=None, verbose=T
     #print f1score
     results.append((f1score, tag, title, predictions))
 
+def clearKey(proteins, key):
+    for protId in proteins:
+        protein = proteins[protId]
+        if key in protein:
+            del protein[key]
+
 def combinePred(proteins, key1, key2, combKey, union=True, limitToSets=None):
     counts = defaultdict(int)
     for protId in proteins:
@@ -184,20 +190,13 @@ def combinePred(proteins, key1, key2, combKey, union=True, limitToSets=None):
         if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
             counts["out-of-sets"] += 1
             continue
-        pred1 = protein.get(key1)
-        pred2 = protein.get(key2)
         protein[combKey] = {}
-        if pred1 != None and pred2 != None:
-            if union:
-                protein[combKey].update(pred1)
-                protein[combKey].update(pred2)
-        elif pred1 == None:
-            counts["missing-prediction-" + key1] += 1
-            combined = pred2
-        else:
-            counts["missing-prediction-" + key2] += 1
-            combined = pred1
-        protein["combKey"] = combined
+        if union:
+            for key in (key1, key2):
+                if key in protein:
+                    protein[combKey].update(protein[key])
+                else:
+                    counts["no-prediction-for-" + key] += 1
     print "Combined predictions, union =", union, "counts =", dict(counts)
     
 def combine(dataPath, nnInput, clsInput, useCafa=False):
@@ -219,11 +218,11 @@ def combine(dataPath, nnInput, clsInput, useCafa=False):
     print "Loading neural network predictions from", nnInput
     for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
         evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred_" + setName)
-    print "Loading all protein predictions from", clsInput
+    print "Loading classifier predictions"
     evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred")
     
     print "Combining predictions"
-    combinePred("nn_pred_devel", "cls_pred", "combined", limitToSets=["devel"])
+    combinePred(proteins, "nn_pred_devel", "cls_pred", "combined", limitToSets=["devel"])
     examples = evaluateFile.makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), limitToSets=["devel"], predKey="combined")
     loading.vectorizeExamples(examples, None)
     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)

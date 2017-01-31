@@ -27,10 +27,11 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         examples["ids"].append(protein["id"])
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
-    for protein in protObjs:
         examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
-        #for pred in examples["predictions"][-1]:
-        #    assert pred in examples["label_size"], pred
+    #for protein in protObjs:
+    #    examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
+    #    #for pred in examples["predictions"][-1]:
+    #    #    assert pred in examples["label_size"], pred
     print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples"
     return examples
 

@@ -1,20 +1,7 @@
-from collections import OrderedDict
-from sklearn.metrics import classification_report
-#from sklearn.cross_validation import LabelKFold
-from sklearn.grid_search import GridSearchCV
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.svm import SVC
-from sklearn.ensemble import ExtraTreesClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
 import copy
 from collections import defaultdict
-from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
-from sklearn.linear_model.perceptron import Perceptron
-from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
-from sklearn.linear_model.stochastic_gradient import SGDClassifier
-from sklearn.neighbors.nearest_centroid import NearestCentroid
-from sklearn.metrics import f1_score
 import evaluateFile
 import loading
 import evaluation
@@ -22,6 +9,7 @@ import sys, os
 import classification
 import shutil
 from utils import Stream
+from sklearn.grid_search import GridSearchCV
 
 def showStats(interactions, entities, useGold):
     stats = defaultdict(int)
@@ -296,7 +284,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     #    assert learnedPredictions[index] == None
     #    learnedPredictions[index] = prediction
     
-def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, useCafa=False, useCombinations=True, useLearning=True, clear=False):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, clear=False):
     if outDir != None:
         if clear and os.path.exists(outDir):
             print "Removing output directory", outDir
@@ -304,7 +292,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         if not os.path.exists(outDir):
             print "Making output directory", outDir
             os.makedirs(outDir)
-        Stream.openLog(os.path.join(options.output, "log.txt"))
+        Stream.openLog(os.path.join(outDir, "log.txt"))
     
     print "==========", "Ensemble", "=========="
     proteins = {}
@@ -344,7 +332,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)
         examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms, outDir=outDir)
-        learn(examples, Classifier, classifierArgs)
+        learn(examples, Classifier, classifierArgs, develFolds=develFolds)
         sys.exit()
         
         X_all = buildFeatures(interactions, entities)
@@ -425,24 +413,18 @@ if __name__=="__main__":
     optparser.add_option("-a", "--nnInput", default=None)
     optparser.add_option("-b", "--clsInput", default=None)
     optparser.add_option("-g", "--gold", default=None)
-    optparser.add_option("-o", "--output", default=None)
+    optparser.add_option("-o", "--outDir", default=None)
     optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
     optparser.add_option("-w", "--write", default="OR")
-    optparser.add_option("-n", "--numFolds", default=5)
+    optparser.add_option("-n", "--develFolds", type=int, default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
     (options, args) = optparser.parse_args()
     
     assert options.write in ("AUTO", "LEARN", "AND", "OR")
-    if options.write == "AUTO":
-        options.write = None
-    if options.output and options.gold == None and options.write == None:
-        raise Exception("Write mode must be defined if no gold data is available")
-    
     options.args = eval(options.args)
-    
-    combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput,
-            classifier=options.classifier, classifierArgs=options.args, develFolds=options.numFolds,
+    combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput, outDir=options.outDir,
+            classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
             useCombinations=options.simple, useLearning=options.learning, clear=options.clear)

@@ -1,4 +1,4 @@
-from keras.layers import Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, GlobalAveragePooling1D, Flatten, merge, Masking
+from keras.layers import Dropout, Input, LSTM, RepeatVector, Embedding, TimeDistributed, Dense, Convolution1D, MaxPooling1D, GlobalMaxPooling1D, GlobalAveragePooling1D, Flatten, merge, Masking
 from keras.models import Model
 from keras.preprocessing import sequence
 from keras.utils import np_utils
@@ -22,15 +22,14 @@ batch_size = 16
 char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
-use_features = False # False = only sequence is used for prediction
-model_dir = './cnn2_model/' # path for saving model + other required stuff
+use_features = True # False = only sequence is used for prediction
+model_dir = './full3_model/' # path for saving model + other required stuff
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
-# FIXME: CAFA targets have * character which should be added to the embeddings (OOV character)
-# TODO: Make predictions for test + cafa targets
 # TODO: Get prediction statistics
 # TODO: Word dropout?
+# TODO: Remove obvious GOs?
 
 def get_annotation_ids(annotation_path, top=None):
     """
@@ -182,7 +181,7 @@ def read_feature_json(path='./data/examples.json.gz'):
     
     from sklearn.feature_selection import VarianceThreshold
     #import pdb; pdb.set_trace()
-    vt = VarianceThreshold(0.0005).fit(std_matrix)
+    vt = VarianceThreshold(0.0001).fit(std_matrix)
     
     better_matrix = vt.transform(std_matrix)
     #good_features = np.array(v.feature_names_)[np.where(vt.transform(std_matrix)==True)]
@@ -316,7 +315,8 @@ def train():
     if use_features:
         #feature_input = Input(shape=(len(blast_hit_ids), ), name='features')
         feature_input = Input(shape=(json_feature_matrix.shape[1], ), name='features') # For Jari's feature vectors
-        feature_encoding = Dense(300, activation='tanh')(feature_input) # Squeeze the feature vectors to a tiny encoding
+        dropout = Dropout(0.5)(feature_input)
+        feature_encoding = Dense(300, activation='tanh')(dropout) # Squeeze the feature vectors to a tiny encoding
         convs.append(feature_encoding)
         input_list.append(feature_input)
     #
@@ -368,7 +368,7 @@ def train():
     
     cafa_id_path = './data/target.all.ids.gz'
     cafa_seq_path = '/home/sukaew/CAFA3/CAFA3_targets/target.all.fasta.gz'
-    cafa_data = generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=128, cafa_targets=True, verbose=True)
+    cafa_data = generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=batch_size, cafa_targets=True, verbose=True)
     cafa_size = _data_size(cafa_id_path)
     cafa_ids = read_split_ids(cafa_id_path, unique=False)
     #import pdb; pdb.set_trace()
@@ -378,9 +378,6 @@ def train():
     #import pdb; pdb.set_trace()
     
     print 'All done.'
-    # TODO: Make predictions for CAFA targets
-    # TODO: Get Jari's feature vectors with CAFA targets
-    # TODO: Figure out CAFA ID stuff
     
 
 def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids, cafa_targets=False):

@@ -3,9 +3,9 @@
 # -i /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/test-allfolds-predicted.tsv.gz -o /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/ -m 1 -l /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/
 
 TARGET_ORGANISMS = ["moon"] + [str(i) for i in [10090 , 10116 , 160488 , 170187 , 208963 , 223283 , 224308 , 237561 , 243232 , 243273, 273057 ,284812, 321314, 3702 , 44689 , 559292 , 7227 , 7955 , 83333 , 8355 , 85962 , 9606 , 99287]] 
-PARAM_KEYWORDS   = "sequence alignment, sequence-profile alignment, profile-profile alignment" + "." 
+PARAM_KEYWORDS   = "sequence alignment, sequence-profile alignment, profile-profile alignment, predicted properties, protein structure, machine learning, other functional information" + "." 
 
-import shutil , datetime , argparse , gzip , csv
+import shutil , datetime , argparse , gzip , csv , zipfile
 import MySQLdb as mdb 
 
 ErrLogFileHandler = None 
@@ -213,15 +213,84 @@ if __name__== "__main__":
     print "log:" + ErrLogFileAddress
     print "-------------------------------------------------" 
 
-    # find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;
-    shutil.os.chdir (OUTPUT_FOLDER) 
-    shutil.os.system ("find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;") 
-    
-    print "EXITING PROGRAM..." 
+    #CLOSE INPUT/OUTPUT FILES ...     
     INPUT_FileHandler.close ()
     for FileHandler in ALL_FILES:
         ALL_FILES[FileHandler].write ("END")
         ALL_FILES[FileHandler].close() 
+
+    """
+    Zip each file into a separate zip file ...
+    # find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;
+    shutil.os.chdir (OUTPUT_FOLDER) 
+    shutil.os.system ("find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;") 
+    """
+    print "COMPRESSING FILES FOR CAFA SUBMISSION ..." 
+    ProteinCentricPredFiles = [] 
+    TermCentricAndMoonlightPredFiles = []
+    for f in ALL_FILES:
+        name = ALL_FILES[f].name 
+        if not "moon" in name:
+            ProteinCentricPredFiles.append (name)
+        else:
+            TermCentricAndMoonlightPredFiles.append (name)
+
+    #ProteinCentricPredictions
+    ZipFileName = args.teamName + "_" + args.modelNumber + "_ProteinCentric" 
+    Z1 = zipfile.ZipFile(OUTPUT_FOLDER + ZipFileName + ".zip" , "w" )
+    for f in ProteinCentricPredFiles:
+        Z1.write(f, ZipFileName + "/" + f.split("/")[-1], compress_type=zipfile.ZIP_DEFLATED)
+    Z1.close()
+    
+    #TermCentricandMoonlightingPredictions
+    ZipFileName = args.teamName + "_" + args.modelNumber + "_TermCentricAndMoonlighting"
+    Z2 = zipfile.ZipFile(OUTPUT_FOLDER + ZipFileName + ".zip" , "w")
+    for f in TermCentricAndMoonlightPredFiles:
+        Z2.write(f, ZipFileName + "/" + f.split("/")[-1], compress_type=zipfile.ZIP_DEFLATED)
+    Z2.close()
+
+    #delte txt files ... 
+    shutil.os.chdir (OUTPUT_FOLDER) 
+    shutil.os.system ("rm -rf *.txt") 
+    
+    print "-------------------------------------------------" 
+    print "EXITING PROGRAM..." 
     EVEXDBcon.close ()
     ErrLogFileHandler.close ()
     print "END." 
+
+
+    """
+    VALID keywords: 
+    --------------------------------------
+    [x] sequence alignment
+    [x] sequence-profile alignment
+    [x] profile-profile alignment
+    [ ] phylogeny
+    [?] sequence properties
+    [ ] physicochemical properties
+    [x] predicted properties
+    [ ] protein interactions
+    [ ] gene expression
+    [ ] mass spectrometry
+    [ ] genetic interactions
+    [x] protein structure
+    [ ] literature
+    [?] genomic context
+    [ ] synteny
+    [ ] structure alignment
+    [ ] comparative model
+    [?] predicted protein structure
+    [ ] de novo prediction
+    [x] machine learning
+    [ ] genome environment
+    [ ] operon
+    [ ] ortholog
+    [ ] paralog
+    [ ] homolog
+    [ ] hidden Markov model
+    [ ] clinical data
+    [ ] genetic data
+    [ ] natural language processing
+    [x] other functional information
+    """

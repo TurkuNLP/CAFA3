@@ -235,8 +235,8 @@ def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
             counts["no-prediction-for-" + key2] += 1
         pred1 = protein.get(key1, empty)
         pred2 = protein.get(key2, empty)
-        conf1 = protein.get(key1 + "-conf", empty)
-        conf2 = protein.get(key2 + "-conf", empty)
+        conf1 = protein.get(key1 + "_conf", empty)
+        conf2 = protein.get(key2 + "_conf", empty)
         protSets = protein.get("sets")
         goldLabels = protein["terms"].keys()
         if limitTerms:
@@ -251,14 +251,18 @@ def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
             features = {label:1}
             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
                 if label in pred:
+                    #assert label in conf, (key, pred, conf, counts)
                     features[label + ":pos:" + key] = 1
                     features[label + ":conf:" + key] = conf[label]
                 else:
                     features[label + ":neg:" + key] = 1
-            examples["classes"].append(1 if label in goldLabels else 0)
-            examples["features"].append(protSets)
+            cls = 1 if label in goldLabels else 0
+            counts["examples"] += 1
+            counts["pos" if cls == 1 else "neg"] += 1
+            examples["classes"].append(cls)
+            examples["features"].append(features)
             examples["sets"].append(protSets)
-    print "Built", len(examples["classes"]), "examples,", dict(counts)
+    print "Built examples,", dict(counts)
     
 def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, useLearning=True):
     print "==========", "Ensemble", "=========="
@@ -279,9 +283,9 @@ def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, us
     
     print "Loading neural network predictions from", nnInput
     for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
-        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred_" + setName, confKey="nn_pred_" + setName + "_conf")
+        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred", confKey="nn_pred_conf")
     print "Loading classifier predictions"
-    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", predKey="cls_pred_conf")
+    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 
@@ -289,19 +293,16 @@ def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, us
         for setName in ("devel", "test"):
             for mode in ("ONLY1", "ONLY2", "AND", "OR"):
                 print "***", "Evaluating predictions for set '" + setName + "' using mode '" + mode + "'", "***"
-                combinePred(proteins, "nn_pred_" + setName, "cls_pred", combKey, mode, limitToSets=[setName])
+                combinePred(proteins, "nn_pred", "cls_pred", combKey, mode, limitToSets=[setName])
                 examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
                 loading.vectorizeExamples(examples, None)
                 results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
-                print "Average:", evaluation.metricsToString(results["average"])
+                print "Average for " + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
     
-    learnedPredictions = None
     if useLearning:
         print "===============", "Learning", "==============="
-        
-        examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=["devel"], predKey=None)
-        loading.vectorizeExamples(examples, None)
-        develFeatures = 
+        learn(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms)
+        sys.exit()
         
         X_all = buildFeatures(interactions, entities)
         learnedPredictions = [None for key in interactions] 
@@ -382,6 +383,7 @@ if __name__=="__main__":
     optparser.add_option("-b", "--clsInput", default=None)
     optparser.add_option("-g", "--gold", default=None)
     optparser.add_option("-o", "--output", default=None)
+    optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
     optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("--concise", default=False, action="store_true", dest="concise", help="")
@@ -396,4 +398,5 @@ if __name__=="__main__":
     if options.output and options.gold == None and options.write == None:
         raise Exception("Write mode must be defined if no gold data is available")  
     
-    combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput)
+    combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput,
+            useCombinations=options.simple, useLearning=options.learning)

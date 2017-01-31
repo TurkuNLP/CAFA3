@@ -76,7 +76,7 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
             if protein != None:
                 if row["predicted"] == "1":
                     protein[predKey][row["label"]] = 1
-                    if confKey:
+                    if confKey != None:
                         protein[confKey][row["label"]] = float(row["confidence"])
                 if readGold and row["gold"] == "1":
                     protein["gold"][row["gold"]] = 1

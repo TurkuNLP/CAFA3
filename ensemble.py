@@ -214,7 +214,7 @@ def combinePred(proteins, key1, key2, combKey, mode="AND", limitToSets=None):
 def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDir=None):
     counts = defaultdict(int)
     empty = {}
-    examples = {"classes":[], "features":[], "sets":[]}
+    examples = {"classes":[], "features":[], "sets":[], "proteins":[], "labels":[]}
     for protId in proteins:
         protein = proteins[protId]
         if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
@@ -243,35 +243,41 @@ def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDi
             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
                 if label in pred:
                     #assert label in conf, (key, pred, conf, counts)
-                    features[label + ":pos:" + key] = 1
-                    features[label + ":conf:" + key] = conf[label]
+                    features["pos:" + key] = 1
+                    features["conf:" + key] = conf[label]
                 else:
-                    features[label + ":neg:" + key] = 1
+                    features["neg:" + key] = 1
             cls = 1 if label in goldLabels else 0
             counts["examples"] += 1
             counts["pos" if cls == 1 else "neg"] += 1
             examples["classes"].append(cls)
             examples["features"].append(features)
             examples["sets"].append(protSets)
+            examples["proteins"].append(protein)
+            examples["labels"].append(label)
     print "Built examples,", dict(counts)
     dv = DictVectorizer(sparse=True)
     examples["features"] = dv.fit_transform(examples["features"])
     examples["feature_names"] = dv.feature_names_
     print "Vectorized the examples, unique features =", len(examples["feature_names"])
     if outDir != None:
-        loading.saveFeatureNames(examples["feature_names"], "features.tsv")
+        loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
     return examples
 
 def getSubset(examples, setNames):
+    subset = {}
+    counts = {}
     sets = examples["sets"]
     indices = [i for i in range(len(sets)) if any(x in setNames for x in sets[i])]
-    features = examples["features"][indices]
-    classes = [examples["classes"][i] for i in indices]
-    sets = [examples["sets"][i] for i in indices]
-    print "Generated example subset for sets", setNames, "with", {"classes":len(classes), "features":features.shape[0], "sets":len(sets)}
-    return {"classes":classes, "features":features, "sets":sets}
+    subset["features"] = examples["features"][indices]
+    counts["features"] = subset["features"].shape[0] 
+    for key in ("classes", "sets", "proteins", "labels"):
+        subset[key] = [examples["classes"][i] for i in indices]
+        counts[key] = len(subset[key])
+    print "Generated example subset for sets", setNames, "with", counts
+    return subset
 
-def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs=1):
+def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs=1, predKey="ensemble", limitTerms=None):
     print "Parameter grid search"
     develExamples = getSubset(examples, ["devel"])
     clf = GridSearchCV(Classifier(), classifierArgs, cv=develFolds, verbose=verbose, n_jobs=n_jobs, scoring="f1_micro")
@@ -280,9 +286,22 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     print "Predicting the test set"
     testExamples = getSubset(examples, ["test"])
     testPredictions = clf.predict(testExamples["features"])
-    #for prediction, index in zip(testPredictions, test):
-    #    assert learnedPredictions[index] == None
-    #    learnedPredictions[index] = prediction
+    testProbabilities = clf.predict_proba(testExamples["features"])
+    predKeyConf = predKey + "_conf"
+    print "Converting binary predictions to labels"
+    for prediction, probability, protein, label in zip(testPredictions, testProbabilities, testExamples["proteins"], testExamples["labels"]):
+        if predKey not in protein:
+            protein[predKey] = {}
+            protein[predKeyConf] = {}
+        if prediction == 1:
+            protein[predKey][label] = 1
+            protein[predKeyConf][label] = probability
+    print "Evaluating test set ensemble predictions"
+    proteins = {x["id"]:x for x in testExamples["proteins"]}
+    examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=["test"], predKey=predKey)
+    loading.vectorizeExamples(examples, None)
+    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    print "Average:", evaluation.metricsToString(results["average"])
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, clear=False):
     if outDir != None:
@@ -332,7 +351,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)
         examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms, outDir=outDir)
-        learn(examples, Classifier, classifierArgs, develFolds=develFolds)
+        learn(examples, Classifier, classifierArgs, develFolds=develFolds, limitTerms=limitTerms)
         sys.exit()
         
         X_all = buildFeatures(interactions, entities)

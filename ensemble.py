@@ -175,17 +175,34 @@ def evaluatePerformance(labels, predictions, results, title, tag=None, verbose=T
     f1score = f1_score(labels, predictions)
     #print f1score
     results.append((f1score, tag, title, predictions))
+
+def combinePred(proteins, key1, key2, combKey, union=True, setNames):
+    counts = defaultdict(int)
+    for protId in proteins:
+        protein = proteins[protId]
+        pred1 = protein.get(key1)
+        pred2 = protein.get(key2)
+        if pred1 != None and pred2 != None:
+            if union:
+                combined = 1 if (pred1 == 1 or pred2 == 1) else 0
+            else:
+                combined = 1 if (pred1 == 1 and pred2 == 1) else 0
+            counts[("pos" if combined == 1 else "neg") + "combined:" + key1 + "=" + str(pred1) + "/" + key2 + "=" + str(pred2)] += 1
+        elif pred1 == None:
+            counts["missing-prediction-" + key1] += 1
+            combined = pred2
+        else:
+            counts["missing-prediction-" + key2] += 1
+            combined = pred1
+        protein["combKey"] = combined
+    print "Combined predictions, union =", union, "counts =", dict(counts)
     
-def combine(dataPath, inputA, inputB, subsetFrom="a", targetSet="devel"):
-    assert subsetFrom in ("a", "b")
-    assert targetSet in ("devel", "test", "cafa")
-    if subsetFrom == "B":
-        inputB, inputA = inputA, inputB
+def combine(dataPath, nnInput, clsInput, useCafa=False):
     print "==========", "Evaluating", "=========="
     proteins = {}
     print "Loading Swissprot proteins"
     loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    if targetSet == "cafa":
+    if useCafa == "cafa":
         print "Loading CAFA3 targets"
         loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
@@ -194,12 +211,16 @@ def combine(dataPath, inputA, inputB, subsetFrom="a", targetSet="devel"):
     topTerms = loading.getTopTerms(termCounts, 5000)
     print "Using", len(topTerms), "most common GO terms"
     loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
-    loading.defineSets(proteins, "overlap" if targetSet == "cafa" else "skip")
+    loading.defineSets(proteins, "overlap" if useCafa else "skip")
     
-    print "Loading subset predictions from", inputA
-    evaluateFile.loadPredictions(proteins, inputA, limitToSets=None, readGold=False, addProteins=True, predKey="predictionsA")
-    print "Loading all protein predictions from", inputB
-    evaluateFile.loadPredictions(proteins, inputB, limitToSets=["devel"], readGold=True, addProteins=True, predKey="predictionsB")
+    print "Loading neural network predictions from", nnInput
+    for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred_" + setName)
+    print "Loading all protein predictions from", clsInput
+    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred")
+    
+    print "Combining predictions"
+    combinePred("nn_pred_devel", "cls_pred")
     sys.exit()
     
     learnedPredictions = None
@@ -280,8 +301,8 @@ if __name__=="__main__":
     from optparse import OptionParser
     optparser = OptionParser(description="Combine relation predictions (All input files must include both positive and negative interaction elements)")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
-    optparser.add_option("-a", "--inputA", default=None)
-    optparser.add_option("-b", "--inputB", default=None)
+    optparser.add_option("-a", "--nnInput", default=None)
+    optparser.add_option("-b", "--clsInput", default=None)
     optparser.add_option("-g", "--gold", default=None)
     optparser.add_option("-o", "--output", default=None)
     optparser.add_option("-l", "--learning", default=False, action="store_true")
@@ -296,4 +317,4 @@ if __name__=="__main__":
     if options.output and options.gold == None and options.write == None:
         raise Exception("Write mode must be defined if no gold data is available")  
     
-    combine(inputA=options.inputA, inputB=options.inputB, subsetFrom=options.subsetFrom)
+    combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput)

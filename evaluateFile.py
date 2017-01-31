@@ -40,7 +40,7 @@ def limitExamples(examples, limitToSets):
     for key in ("labels", "predictions"):
         examples[key] = examples[key][indices]
 
-def loadPredictions(proteins, inPath, limitToSets, readGold=True, addProteins=False, predKey="predictions"):
+def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predictions"):
     print "Loading predictions from", inPath
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
@@ -50,8 +50,6 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, addProteins=Fa
         for row in reader:
             if currentId != row["id"]:
                 currentId = row["id"]
-                if addProteins and row["id"] not in proteins:
-                    proteins[row["id"]] = {"id":row["id"]}
                 if row["id"] in proteins:
                     protein = proteins[row["id"]]
                     if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):

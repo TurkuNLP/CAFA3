@@ -23,7 +23,7 @@ char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 use_features = False # False = only sequence is used for prediction
-model_dir = './cnn_model/' # path for saving model + other required stuff
+model_dir = './cnn2_model/' # path for saving model + other required stuff
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
@@ -331,7 +331,7 @@ def train():
     
     print 'Training model'
     es_cb = EarlyStopping(monitor='val_fmeasure', patience=10, verbose=0, mode='max')
-    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', save_best_only=True,verbose=0)
+    cp_cb = ModelCheckpoint(filepath=os.path.join(model_dir, 'model.hdf5'), monitor='val_fmeasure', mode='max', save_best_only=True,verbose=0)
     #model.fit(pretrain_data, pretrain_data, nb_epoch=100, batch_size=16, validation_data=[devel_data, devel_data], callbacks=[es_cb, cp_cb])
     model.fit_generator(train_data, samples_per_epoch=train_size, nb_epoch=100, validation_data=devel_data, nb_val_samples=devel_size, callbacks=[es_cb, cp_cb])
     

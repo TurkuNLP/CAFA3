@@ -23,7 +23,7 @@ char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
 use_features = False # False = only sequence is used for prediction
-model_dir = './model/' # path for saving model + other required stuff
+model_dir = './cnn_model/' # path for saving model + other required stuff
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
@@ -65,12 +65,12 @@ def get_annotation_dict(annotation_data):
 
 def read_split_ids(split_path, unique=True):
     split_file = gzip.open(split_path)
-    split_data = [s.strip() for s in split_file]
+    split_data = [s.strip().replace('>', '') for s in split_file]
     if unique:
         split_data = set(split_data)
     return split_data
 
-def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
+def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256, cafa_targets=False, verbose=False):
     """
     Generates NN compatible data.
     """
@@ -83,7 +83,6 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
     
     if split_path:
         split_ids = read_split_ids(split_path)
-    import random
     while True:
         prot_ids = []
         x = []
@@ -91,14 +90,20 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256):
         y = []
         
         for i, (prot_id, seq) in enumerate(pairwise(seq_data)):
-            #if i % 10000 == 0:
-            #    print i
-            prot_id = prot_id.strip().strip('>')
+            if verbose and i % 10000 == 0:
+                print 'Generator: ', i
+            if cafa_targets:
+                cafa_id, prot_id = prot_id.strip().replace('>', '').split(' ')
+            else:
+                prot_id = prot_id.strip().strip('>')
             if split_path and prot_id not in split_ids:
                 continue
-            prot_ids.append(prot_id)
+            if cafa_targets:
+                prot_ids.append('%s %s' % (cafa_id, prot_id))
+            else:
+                prot_ids.append(prot_id)
             seq = seq.strip()
-            seq_id_list = [char_dict[s] for s in seq]
+            seq_id_list = [char_dict[s] for s in seq if s != '*']
             #seq_id_list = [aa_index_ids.get(s, 0) for s in seq]
             annotations = ann_dict[prot_id]
             ann_id_list = [ann_ids[a] for a in annotations if a in ann_ids]
@@ -252,17 +257,17 @@ def train():
     train_path = './data/train.txt.gz'
     train_data = generate_data(train_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
     train_size = _data_size(train_path)
-    train_ids = read_split_ids(train_path)
+    train_ids = read_split_ids(train_path, unique=False)
     
     devel_path = './data/devel.txt.gz'
     devel_data = generate_data(devel_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
     devel_size = _data_size(devel_path)
-    devel_ids = read_split_ids(devel_path)
+    devel_ids = read_split_ids(devel_path, unique=False)
     
     test_path = './data/test.txt.gz'
     test_data = generate_data(test_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
     test_size = _data_size(test_path)
-    test_ids = read_split_ids(test_path)
+    test_ids = read_split_ids(test_path, unique=False)
     
     #print "Making baseline predictions"
     #import baseline
@@ -348,25 +353,37 @@ def train():
     from keras.models import load_model
     model = load_model(filepath=os.path.join(model_dir, 'model.hdf5'), custom_objects={"weighted_binary_crossentropy":weighted_binary_crossentropy})
     
-    devel_score = model.evaluate_generator(devel_data, devel_size)
-    test_score = model.evaluate_generator(test_data, test_size)
-    print 'Devel l/a/p/r/f: ', devel_score
-    print 'Test l/a/p/r/f: ', test_score
+    #devel_score = model.evaluate_generator(devel_data, devel_size)
+    #test_score = model.evaluate_generator(test_data, test_size)
+    #print 'Devel l/a/p/r/f: ', devel_score
+    #print 'Test l/a/p/r/f: ', test_score
+    #
+    #devel_pred = model.predict_generator(devel_data, devel_size)
+    #test_pred = model.predict_generator(test_data, test_size)
+    #
+    #save_predictions(os.path.join(model_dir, 'devel_pred.tsv.gz'), devel_ids, devel_pred, reverse_ann_ids)
+    #save_predictions(os.path.join(model_dir, 'test_pred.tsv.gz'), test_ids, test_pred, reverse_ann_ids)
     
-    devel_pred = model.predict_generator(devel_data, devel_size)
-    test_pred = model.predict_generator(test_data, test_size)
+    print 'Making CAFA target predictions'
     
-    save_predictions(os.path.join(model_dir, 'devel_pred.tsv.gz'), devel_ids, devel_pred, reverse_ann_ids)
-    save_predictions(os.path.join(model_dir, 'test_pred.tsv.gz'), test_ids, test_pred, reverse_ann_ids)
+    cafa_id_path = './data/target.all.ids.gz'
+    cafa_seq_path = '/home/sukaew/CAFA3/CAFA3_targets/target.all.fasta.gz'
+    cafa_data = generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=128, cafa_targets=True, verbose=True)
+    cafa_size = _data_size(cafa_id_path)
+    cafa_ids = read_split_ids(cafa_id_path, unique=False)
+    #import pdb; pdb.set_trace()
+    cafa_pred = model.predict_generator(cafa_data, cafa_size)
+    
+    save_predictions(os.path.join(model_dir, 'cafa_targets.tsv.gz'), cafa_ids, cafa_pred, reverse_ann_ids, cafa_targets=True)
+    #import pdb; pdb.set_trace()
     
     print 'All done.'
-    #devel_pred_labels = np.round(devel_pred)
-    #test_pred_labels = np.round(test_pred)
-    # TODO: Save devel and test set predictions
     # TODO: Make predictions for CAFA targets
+    # TODO: Get Jari's feature vectors with CAFA targets
+    # TODO: Figure out CAFA ID stuff
     
 
-def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids):
+def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids, cafa_targets=False):
     """
     Saves predictions in tsv format
     """
@@ -374,10 +391,10 @@ def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids):
     with gzip.open(out_path, 'wb') as csvfile:
         writer = csv.writer(csvfile, delimiter='\t',
                                 quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(['id', 'label_index', 'label', 'predicted', 'confidence']) # Header line
+        writer.writerow(['id', 'label_index', 'label', 'predicted', 'confidence', 'cafa_ids']) # Header line
         
         for i, prot_id in enumerate(prot_ids):
-            if i % 1000 == 0:
+            if i % 10000 == 0:
                 print i
             pred_indices = np.round(predictions[i]).nonzero()[0]
             if len(pred_indices) > 1500:
@@ -386,9 +403,11 @@ def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids):
             for pred_i in pred_indices:
                 go_id = reverse_ann_ids[pred_i]
                 confidence = predictions[i, pred_i]
-                writer.writerow([prot_id, pred_i, go_id, 1, '%.2f' % confidence])
-            
-    pass
+                if cafa_targets:
+                    cafa_id, p_id = prot_id.split(' ')
+                    writer.writerow([p_id, pred_i, go_id, 1, '%.2f' % confidence, cafa_id])
+                else:
+                    writer.writerow([prot_id, pred_i, go_id, 1, '%.2f' % confidence, ''])
 
     
 def weighted_binary_crossentropy(target, output):

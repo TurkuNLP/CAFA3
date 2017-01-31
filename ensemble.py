@@ -17,6 +17,7 @@ from sklearn.neighbors.nearest_centroid import NearestCentroid
 from sklearn.metrics import f1_score
 import evaluateFile
 import loading
+import evaluation
 import sys, os
 
 def showStats(interactions, entities, useGold):
@@ -176,18 +177,20 @@ def evaluatePerformance(labels, predictions, results, title, tag=None, verbose=T
     #print f1score
     results.append((f1score, tag, title, predictions))
 
-def combinePred(proteins, key1, key2, combKey, union=True, setNames):
+def combinePred(proteins, key1, key2, combKey, union=True, limitToSets=None):
     counts = defaultdict(int)
     for protId in proteins:
         protein = proteins[protId]
+        if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
+            counts["out-of-sets"] += 1
+            continue
         pred1 = protein.get(key1)
         pred2 = protein.get(key2)
+        protein[combKey] = {}
         if pred1 != None and pred2 != None:
             if union:
-                combined = 1 if (pred1 == 1 or pred2 == 1) else 0
-            else:
-                combined = 1 if (pred1 == 1 and pred2 == 1) else 0
-            counts[("pos" if combined == 1 else "neg") + "combined:" + key1 + "=" + str(pred1) + "/" + key2 + "=" + str(pred2)] += 1
+                protein[combKey].update(pred1)
+                protein[combKey].update(pred2)
         elif pred1 == None:
             counts["missing-prediction-" + key1] += 1
             combined = pred2
@@ -220,7 +223,11 @@ def combine(dataPath, nnInput, clsInput, useCafa=False):
     evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred")
     
     print "Combining predictions"
-    combinePred("nn_pred_devel", "cls_pred")
+    combinePred("nn_pred_devel", "cls_pred", "combined", limitToSets=["devel"])
+    examples = evaluateFile.makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), limitToSets=["devel"], predKey="combined")
+    loading.vectorizeExamples(examples, None)
+    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    print "Average:", evaluation.metricsToString(results["average"])
     sys.exit()
     
     learnedPredictions = None

@@ -6,12 +6,14 @@ import csv
 import evaluation
 import operator
 
-def makeExamples(proteins, limitTerms):
+def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
     print "Converting proteins to examples"
     examples = {"predictions":[], "labels":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     protObjs = [proteins[key] for key in protIds]
     for protein in protObjs:
+        if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
+            continue
         # Build labels
         labels = protein["terms"].keys()
         labels = sorted(labels)
@@ -26,7 +28,7 @@ def makeExamples(proteins, limitTerms):
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
     for protein in protObjs:
-        examples["predictions"].append(sorted(protein.get("predictions", {}).keys()))
+        examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
         #for pred in examples["predictions"][-1]:
         #    assert pred in examples["label_size"], pred
     print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples"

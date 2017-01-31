@@ -27,7 +27,8 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         examples["ids"].append(protein["id"])
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
-        examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
+        if predKey != None:
+            examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
     #for protein in protObjs:
     #    examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
     #    #for pred in examples["predictions"][-1]:
@@ -43,7 +44,7 @@ def limitExamples(examples, limitToSets):
     for key in ("labels", "predictions"):
         examples[key] = examples[key][indices]
 
-def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predictions"):
+def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predictions", confKey=None):
     print "Loading predictions from", inPath
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
@@ -64,6 +65,8 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
                     else:
                         counts[predKey] += 1
                         protein[predKey] = {}
+                        if confKey != None:
+                            protein[confKey] = {}
                         if readGold:
                             assert "gold" not in protein
                             protein["gold"] = {}
@@ -73,6 +76,8 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
             if protein != None:
                 if row["predicted"] == "1":
                     protein[predKey][row["label"]] = 1
+                    if confKey:
+                        protein[confKey][row["label"]] = row["confidence"]
                 if readGold and row["gold"] == "1":
                     protein["gold"][row["gold"]] = 1
     print "Predictions loaded:", counts
@@ -96,7 +101,7 @@ def evaluateFile(inPath, dataPath, setNames):
     loading.defineSets(proteins, "skip")
     
     loadPredictions(proteins, inPath, setNames)
-    examples = makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]))
+    examples = makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), predKey="predictions")
     #print "labels", examples["labels"][0:500]
     #print "predictions", examples["predictions"][0:500]
     loading.vectorizeExamples(examples, None)

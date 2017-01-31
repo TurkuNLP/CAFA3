@@ -219,8 +219,38 @@ def combinePred(proteins, key1, key2, combKey, mode="AND", limitToSets=None):
                 protein[combKey] = protein[key]
                 
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
+
+def learn(proteins, key1, key2, limitToSets=None):
+    counts = defaultdict(int)
+    empty = {}
+    for protId in proteins:
+        protein = proteins[protId]
+        if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
+            counts["out-of-sets"] += 1
+            continue
+        assert "features" not in protein
+        features = {}
+        if key1 not in protein:
+            counts["no-prediction-for-" + key1] += 1
+        if key2 not in protein:
+            counts["no-prediction-for-" + key2] += 1
+        pred1 = protein.get(key1, {})
+        pred2 = protein.get(key2, {})
+        allPredicted = sorted(set(protein.get(key1, {}).keys() + protein.get(key2).keys()))
+        for label in allPredicted:
+            for key in (key1, key2):
+                if key in protein:
+                    pred = protein[key]
+                    for label in 
+                    features[key1] =
+                else:
+                    counts["no-prediction-for-" + key2] += 1
+        
+        pred1 = protein.get(key1)
+        if pred1 == None:
+            counts["no-prediction-for-" + key1] += 1
     
-def combine(dataPath, nnInput, clsInput, useCafa=False):
+def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, useLearning=True):
     print "==========", "Ensemble", "=========="
     proteins = {}
     print "Loading Swissprot proteins"
@@ -232,33 +262,37 @@ def combine(dataPath, nnInput, clsInput, useCafa=False):
     termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)
     topTerms = loading.getTopTerms(termCounts, 5000)
+    limitTerms=set([x[0] for x in topTerms])
     print "Using", len(topTerms), "most common GO terms"
     loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
     loading.defineSets(proteins, "overlap" if useCafa else "skip")
     
     print "Loading neural network predictions from", nnInput
     for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
-        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred_" + setName)
+        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred_" + setName, confKey="nn_pred_" + setName + "_conf")
     print "Loading classifier predictions"
-    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred")
+    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", predKey="cls_pred_conf")
     
-    print "Combining predictions"
-    combKey = "combined"
-    for setName in ("devel", "test"):
-        for mode in ("ONLY1", "ONLY2", "AND", "OR"):
-            print "***", "Evaluating predictions for set '" + setName + "' using mode '" + mode + "'", "***"
-            combinePred(proteins, "nn_pred_" + setName, "cls_pred", combKey, mode, limitToSets=[setName])
-            examples = evaluateFile.makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), limitToSets=[setName], predKey=combKey)
-            loading.vectorizeExamples(examples, None)
-            results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
-            print "Average:", evaluation.metricsToString(results["average"])
-            clearKey(proteins, combKey)
-    
-    sys.exit()
+    if useCombinations:
+        print "===============", "Combining predictions", "===============" 
+        combKey = "combined"
+        for setName in ("devel", "test"):
+            for mode in ("ONLY1", "ONLY2", "AND", "OR"):
+                print "***", "Evaluating predictions for set '" + setName + "' using mode '" + mode + "'", "***"
+                combinePred(proteins, "nn_pred_" + setName, "cls_pred", combKey, mode, limitToSets=[setName])
+                examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
+                loading.vectorizeExamples(examples, None)
+                results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+                print "Average:", evaluation.metricsToString(results["average"])
     
     learnedPredictions = None
-    if learning:
-        print "===============", "Learning", "===============" 
+    if useLearning:
+        print "===============", "Learning", "==============="
+        
+        examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=["devel"], predKey=None)
+        loading.vectorizeExamples(examples, None)
+        develFeatures = 
+        
         X_all = buildFeatures(interactions, entities)
         learnedPredictions = [None for key in interactions] 
         lkfOuter = LabelKFold(documentLabels, n_folds=10)
@@ -342,6 +376,8 @@ if __name__=="__main__":
     optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("--concise", default=False, action="store_true", dest="concise", help="")
     optparser.add_option("--subsetFrom", default="a")
+    optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
+    optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     (options, args) = optparser.parse_args()
     
     assert options.write in ("AUTO", "LEARN", "AND", "OR")

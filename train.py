@@ -353,16 +353,16 @@ def train():
     from keras.models import load_model
     model = load_model(filepath=os.path.join(model_dir, 'model.hdf5'), custom_objects={"weighted_binary_crossentropy":weighted_binary_crossentropy})
     
-    #devel_score = model.evaluate_generator(devel_data, devel_size)
-    #test_score = model.evaluate_generator(test_data, test_size)
-    #print 'Devel l/a/p/r/f: ', devel_score
-    #print 'Test l/a/p/r/f: ', test_score
-    #
-    #devel_pred = model.predict_generator(devel_data, devel_size)
-    #test_pred = model.predict_generator(test_data, test_size)
-    #
-    #save_predictions(os.path.join(model_dir, 'devel_pred.tsv.gz'), devel_ids, devel_pred, reverse_ann_ids)
-    #save_predictions(os.path.join(model_dir, 'test_pred.tsv.gz'), test_ids, test_pred, reverse_ann_ids)
+    devel_score = model.evaluate_generator(devel_data, devel_size)
+    test_score = model.evaluate_generator(test_data, test_size)
+    print 'Devel l/a/p/r/f: ', devel_score
+    print 'Test l/a/p/r/f: ', test_score
+    
+    devel_pred = model.predict_generator(devel_data, devel_size)
+    test_pred = model.predict_generator(test_data, test_size)
+    
+    save_predictions(os.path.join(model_dir, 'devel_pred.tsv.gz'), devel_ids, devel_pred, reverse_ann_ids)
+    save_predictions(os.path.join(model_dir, 'test_pred.tsv.gz'), test_ids, test_pred, reverse_ann_ids)
     
     print 'Making CAFA target predictions'
     

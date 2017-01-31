@@ -220,35 +220,45 @@ def combinePred(proteins, key1, key2, combKey, mode="AND", limitToSets=None):
                 
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
 
-def learn(proteins, key1, key2, limitToSets=None):
+def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
     counts = defaultdict(int)
     empty = {}
+    examples = {"classes":[], "features":[], "sets":[]}
     for protId in proteins:
         protein = proteins[protId]
         if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
             counts["out-of-sets"] += 1
             continue
-        assert "features" not in protein
-        features = {}
         if key1 not in protein:
             counts["no-prediction-for-" + key1] += 1
         if key2 not in protein:
             counts["no-prediction-for-" + key2] += 1
-        pred1 = protein.get(key1, {})
-        pred2 = protein.get(key2, {})
-        allPredicted = sorted(set(protein.get(key1, {}).keys() + protein.get(key2).keys()))
-        for label in allPredicted:
-            for key in (key1, key2):
-                if key in protein:
-                    pred = protein[key]
-                    for label in 
-                    features[key1] =
+        pred1 = protein.get(key1, empty)
+        pred2 = protein.get(key2, empty)
+        conf1 = protein.get(key1 + "-conf", empty)
+        conf2 = protein.get(key2 + "-conf", empty)
+        protSets = protein.get("sets")
+        goldLabels = protein["terms"].keys()
+        if limitTerms:
+            goldLabels = [x for x in goldLabels if x in limitTerms]
+        allLabels = sorted(set(pred1.keys() + pred2.keys() + goldLabels))
+        goldLabels = set(goldLabels)
+        #for label in goldLabels:
+        #    if label not in examples["label_size"]:
+        #        examples["label_size"][label] = 0
+        #    examples["label_size"][label] += 1
+        for label in allLabels:
+            features = {label:1}
+            for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
+                if label in pred:
+                    features[label + ":pos:" + key] = 1
+                    features[label + ":conf:" + key] = conf[label]
                 else:
-                    counts["no-prediction-for-" + key2] += 1
-        
-        pred1 = protein.get(key1)
-        if pred1 == None:
-            counts["no-prediction-for-" + key1] += 1
+                    features[label + ":neg:" + key] = 1
+            examples["classes"].append(1 if label in goldLabels else 0)
+            examples["features"].append(protSets)
+            examples["sets"].append(protSets)
+    print "Built", len(examples["classes"]), "examples,", dict(counts)
     
 def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, useLearning=True):
     print "==========", "Ensemble", "=========="

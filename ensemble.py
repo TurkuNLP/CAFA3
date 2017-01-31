@@ -19,6 +19,9 @@ import evaluateFile
 import loading
 import evaluation
 import sys, os
+import classification
+import shutil
+from utils import Stream
 
 def showStats(interactions, entities, useGold):
     stats = defaultdict(int)
@@ -220,7 +223,7 @@ def combinePred(proteins, key1, key2, combKey, mode="AND", limitToSets=None):
                 
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
 
-def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
+def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDir=None):
     counts = defaultdict(int)
     empty = {}
     examples = {"classes":[], "features":[], "sets":[]}
@@ -248,7 +251,7 @@ def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
         #        examples["label_size"][label] = 0
         #    examples["label_size"][label] += 1
         for label in allLabels:
-            features = {label:1}
+            features = {} #{label:1}
             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
                 if label in pred:
                     #assert label in conf, (key, pred, conf, counts)
@@ -263,8 +266,46 @@ def learn(proteins, key1, key2, limitToSets=None, limitTerms=None):
             examples["features"].append(features)
             examples["sets"].append(protSets)
     print "Built examples,", dict(counts)
+    dv = DictVectorizer(sparse=True)
+    examples["features"] = dv.fit_transform(examples["features"])
+    examples["feature_names"] = dv.feature_names_
+    print "Vectorized the examples, unique features =", len(examples["feature_names"])
+    if outDir != None:
+        loading.saveFeatureNames(examples["feature_names"], "features.tsv")
+    return examples
+
+def getSubset(examples, setNames):
+    sets = examples["sets"]
+    indices = [i for i in range(len(sets)) if any(x in setNames for x in sets[i])]
+    features = examples["features"][indices]
+    classes = [examples["classes"][i] for i in indices]
+    sets = [examples["sets"][i] for i in indices]
+    print "Generated example subset for sets", setNames, "with", {"classes":len(classes), "features":features.shape[0], "sets":len(sets)}
+    return {"classes":classes, "features":features, "sets":sets}
+
+def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs=1):
+    print "Parameter grid search"
+    develExamples = getSubset(examples, ["devel"])
+    clf = GridSearchCV(Classifier(), classifierArgs, cv=develFolds, verbose=verbose, n_jobs=n_jobs, scoring="f1_micro")
+    clf.fit(develExamples["features"], develExamples["classes"])
+    print "Best params", (clf.best_params_, clf.best_score_)
+    print "Predicting the test set"
+    testExamples = getSubset(examples, ["test"])
+    testPredictions = clf.predict(testExamples["features"])
+    #for prediction, index in zip(testPredictions, test):
+    #    assert learnedPredictions[index] == None
+    #    learnedPredictions[index] = prediction
     
-def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, useLearning=True):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, useCafa=False, useCombinations=True, useLearning=True, clear=False):
+    if outDir != None:
+        if clear and os.path.exists(outDir):
+            print "Removing output directory", outDir
+            shutil.rmtree(outDir)
+        if not os.path.exists(outDir):
+            print "Making output directory", outDir
+            os.makedirs(outDir)
+        Stream.openLog(os.path.join(options.output, "log.txt"))
+    
     print "==========", "Ensemble", "=========="
     proteins = {}
     print "Loading Swissprot proteins"
@@ -301,7 +342,9 @@ def combine(dataPath, nnInput, clsInput, useCafa=False, useCombinations=True, us
     
     if useLearning:
         print "===============", "Learning", "==============="
-        learn(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms)
+        Classifier = classification.importNamed(classifier)
+        examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms, outDir=outDir)
+        learn(examples, Classifier, classifierArgs)
         sys.exit()
         
         X_all = buildFeatures(interactions, entities)
@@ -386,17 +429,20 @@ if __name__=="__main__":
     optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
     optparser.add_option("-w", "--write", default="OR")
-    optparser.add_option("--concise", default=False, action="store_true", dest="concise", help="")
-    optparser.add_option("--subsetFrom", default="a")
+    optparser.add_option("-n", "--numFolds", default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
+    optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
     (options, args) = optparser.parse_args()
     
     assert options.write in ("AUTO", "LEARN", "AND", "OR")
     if options.write == "AUTO":
         options.write = None
     if options.output and options.gold == None and options.write == None:
-        raise Exception("Write mode must be defined if no gold data is available")  
+        raise Exception("Write mode must be defined if no gold data is available")
+    
+    options.args = eval(options.args)
     
     combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput,
-            useCombinations=options.simple, useLearning=options.learning)
+            classifier=options.classifier, classifierArgs=options.args, develFolds=options.numFolds,
+            useCombinations=options.simple, useLearning=options.learning, clear=options.clear)

@@ -16,7 +16,8 @@ from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.neighbors.nearest_centroid import NearestCentroid
 from sklearn.metrics import f1_score
 import evaluateFile
-import sys
+import loading
+import sys, os
 
 def showStats(interactions, entities, useGold):
     stats = defaultdict(int)
@@ -175,15 +176,30 @@ def evaluatePerformance(labels, predictions, results, title, tag=None, verbose=T
     #print f1score
     results.append((f1score, tag, title, predictions))
     
-def combine(inputA, inputB, learning=True, outPath=None, outMode=None, subsetFrom="a"):
+def combine(dataPath, inputA, inputB, subsetFrom="a", targetSet="devel"):
     assert subsetFrom in ("a", "b")
+    assert targetSet in ("devel", "test", "cafa")
     if subsetFrom == "B":
         inputB, inputA = inputA, inputB
+    print "==========", "Evaluating", "=========="
     proteins = {}
+    print "Loading Swissprot proteins"
+    loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+    if targetSet == "cafa":
+        print "Loading CAFA3 targets"
+        loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+    print "Proteins:", len(proteins)
+    termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
+    print "Unique terms:", len(termCounts)
+    topTerms = loading.getTopTerms(termCounts, 5000)
+    print "Using", len(topTerms), "most common GO terms"
+    loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+    loading.defineSets(proteins, "overlap" if targetSet == "cafa" else "skip")
+    
     print "Loading subset predictions from", inputA
     evaluateFile.loadPredictions(proteins, inputA, limitToSets=None, readGold=False, addProteins=True, predKey="predictionsA")
     print "Loading all protein predictions from", inputB
-    evaluateFile.loadPredictions(proteins, inputB, limitToSets=None, readGold=True, addProteins=False, predKey="predictionsB")
+    evaluateFile.loadPredictions(proteins, inputB, limitToSets=["devel"], readGold=True, addProteins=True, predKey="predictionsB")
     sys.exit()
     
     learnedPredictions = None
@@ -263,6 +279,7 @@ def combine(inputA, inputB, learning=True, outPath=None, outMode=None, subsetFro
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="Combine relation predictions (All input files must include both positive and negative interaction elements)")
+    optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
     optparser.add_option("-a", "--inputA", default=None)
     optparser.add_option("-b", "--inputB", default=None)
     optparser.add_option("-g", "--gold", default=None)

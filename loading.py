@@ -1,6 +1,7 @@
 import gzip
 import csv
 import os
+import operator
 from collections import defaultdict
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -52,6 +53,9 @@ def loadHPOAnnotations(inPath, proteins):
             counts[termId] += 1
     print "Loaded HPO annotations:", {key:len(stats[key]) for key in stats}
     return counts
+
+def getTopTerms(counts, num=1000):
+    return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
 def loadGOTerms(inPath):
     print "Loading GO terms from", inPath

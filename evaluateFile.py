@@ -40,36 +40,39 @@ def limitExamples(examples, limitToSets):
     for key in ("labels", "predictions"):
         examples[key] = examples[key][indices]
 
-def loadPredictions(proteins, inPath, limitToSets):
+def loadPredictions(proteins, inPath, limitToSets, readGold=True, addProteins=False, predKey="predictions"):
     print "Loading predictions from", inPath
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
         protein = None
-        counts = {"duplicates":0, "predicted":0, "protein-not-loaded":0, "out-of-sets":0}
+        counts = {"duplicates":0, predKey:0, "protein-not-loaded":0, "out-of-sets":0}
         currentId = None
         for row in reader:
             if currentId != row["id"]:
                 currentId = row["id"]
+                if addProteins and row["id"] not in proteins:
+                    proteins[row["id"]] = {"id":row["id"]}
                 if row["id"] in proteins:
                     protein = proteins[row["id"]]
-                    if not any(x in limitToSets for x in protein["sets"]):
+                    if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
                         counts["out-of-sets"] += 1
                         protein = None
-                    elif "predictions" in protein:
+                    elif predKey in protein:
                         counts["duplicates"] += 1
                         protein = None
                     else:
-                        counts["predicted"] += 1
-                        protein["predictions"] = {}
-                        assert "gold" not in protein
-                        protein["gold"] = {}
+                        counts[predKey] += 1
+                        protein[predKey] = {}
+                        if readGold:
+                            assert "gold" not in protein
+                            protein["gold"] = {}
                 else:
                     counts["protein-not-loaded"] += 1
                     protein = None
             if protein != None:
                 if row["predicted"] == "1":
-                    protein["predictions"][row["label"]] = 1
-                if row["gold"] == "1":
+                    protein[predKey][row["label"]] = 1
+                if readGold and row["gold"] == "1":
                     protein["gold"][row["gold"]] = 1
     print "Predictions loaded:", counts
 

@@ -1,5 +1,3 @@
-import Utils.ElementTreeUtils as ETUtils
-import Utils.STFormat.ConvertXML as ConvertXML
 from collections import OrderedDict
 from sklearn.metrics import classification_report
 #from sklearn.cross_validation import LabelKFold
@@ -17,6 +15,8 @@ from sklearn.ensemble.gradient_boosting import GradientBoostingClassifier
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.neighbors.nearest_centroid import NearestCentroid
 from sklearn.metrics import f1_score
+import evaluateFile
+import sys
 
 def showStats(interactions, entities, useGold):
     stats = defaultdict(int)
@@ -175,26 +175,17 @@ def evaluatePerformance(labels, predictions, results, title, tag=None, verbose=T
     #print f1score
     results.append((f1score, tag, title, predictions))
     
-def combine(inputA, inputB, inputGold, learning=True, outPath=None, outMode=None, concise=False):
-    if not concise: print "Loading the Interaction XML files"
-    a = ETUtils.ETFromObj(inputA)
-    b = ETUtils.ETFromObj(inputB)
-    gold = ETUtils.ETFromObj(inputGold) if inputGold else None
-    if not concise: print "Reading interactions from input XML files"
-    interactions = getInteractions(a, b, gold)
-    entities = {x.get("id"):x for x in a.getroot().iter('entity')}
-    if not concise:
-        print "===============", "Statistics", "===============" 
-        showStats(interactions, entities, inputGold != None)
-
-    documentLabels = [key.split(".s")[0] for key in interactions]
-    if not concise: print "Total interactions =", len(interactions)
-    if not concise: print "Unique K-fold labels =", len(set(documentLabels))
-    if gold != None:
-        y_all = [1 if (interactions[key]["gold"].get("type") != "neg") else -1 for key in interactions]
-    else:
-        y_all = [-1 for key in interactions]
-    if not concise: print "pos / neg = ", y_all.count(1), "/", y_all.count(-1)    
+def combine(inputA, inputB, learning=True, outPath=None, outMode=None, subsetFrom="a"):
+    assert subsetFrom in ("a", "b")
+    if subsetFrom == "B":
+        inputB, inputA = inputA, inputB
+    proteins = {}
+    print "Loading subset predictions from", inputA
+    evaluateFile.loadPredictions(proteins, inputA, limitToSets=None, readGold=False, addProteins=True, predKey="predictionsA")
+    print "Loading all protein predictions from", inputB
+    evaluateFile.loadPredictions(proteins, inputB, limitToSets=None, readGold=True, addProteins=False, predKey="predictionsB")
+    sys.exit()
+    
     learnedPredictions = None
     if learning:
         print "===============", "Learning", "===============" 
@@ -272,13 +263,14 @@ def combine(inputA, inputB, inputGold, learning=True, outPath=None, outMode=None
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="Combine relation predictions (All input files must include both positive and negative interaction elements)")
-    optparser.add_option("-a", "--inputA", default=None, dest="inputA", help="First set of predictions in Interaction XML format")
-    optparser.add_option("-b", "--inputB", default=None, dest="inputB", help="Second set of predictions in Interaction XML format")
-    optparser.add_option("-g", "--gold", default=None, dest="gold", help="Gold interactions in Interaction XML format")
-    optparser.add_option("-o", "--output", default=None, dest="output", help="Path to output Interaction XML file (if exists will be overwritten)")
-    optparser.add_option("-l", "--learning", default=False, action="store_true", dest="learning", help="Train a classifier for combining the predictions")
-    optparser.add_option("-w", "--write", default="OR", dest="write", help="The combination for the output. If none is defined, the best performing one is used.")
+    optparser.add_option("-a", "--inputA", default=None)
+    optparser.add_option("-b", "--inputB", default=None)
+    optparser.add_option("-g", "--gold", default=None)
+    optparser.add_option("-o", "--output", default=None)
+    optparser.add_option("-l", "--learning", default=False, action="store_true")
+    optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("--concise", default=False, action="store_true", dest="concise", help="")
+    optparser.add_option("--subsetFrom", default="a")
     (options, args) = optparser.parse_args()
     
     assert options.write in ("AUTO", "LEARN", "AND", "OR")
@@ -287,4 +279,4 @@ if __name__=="__main__":
     if options.output and options.gold == None and options.write == None:
         raise Exception("Write mode must be defined if no gold data is available")  
     
-    combine(options.inputA, options.inputB, options.gold, options.learning, options.output, options.write, concise=options.concise)
+    combine(inputA=options.inputA, inputB=options.inputB, subsetFrom=options.subsetFrom)

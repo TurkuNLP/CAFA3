@@ -232,7 +232,7 @@ def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDi
         goldLabels = protein["terms"].keys()
         if limitTerms:
             goldLabels = [x for x in goldLabels if x in limitTerms]
-        allLabels = sorted(set(pred1.keys() + pred2.keys() + goldLabels))
+        allLabels = sorted(set(pred1.keys() + pred2.keys())) # + goldLabels))
         goldLabels = set(goldLabels)
         #for label in goldLabels:
         #    if label not in examples["label_size"]:

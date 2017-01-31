@@ -272,7 +272,7 @@ def getSubset(examples, setNames):
     subset["features"] = examples["features"][indices]
     counts["features"] = subset["features"].shape[0] 
     for key in ("classes", "sets", "proteins", "labels"):
-        subset[key] = [examples["classes"][i] for i in indices]
+        subset[key] = [examples[key][i] for i in indices]
         counts[key] = len(subset[key])
     print "Generated example subset for sets", setNames, "with", counts
     return subset

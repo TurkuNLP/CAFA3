@@ -81,6 +81,7 @@ def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDi
         #    examples["label_size"][label] += 1
         for label in allLabels:
             features = {} #{label:1}
+            features[label] = 1
             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
                 if label in pred:
                     #assert label in conf, (key, pred, conf, counts)
@@ -204,6 +205,7 @@ if __name__=="__main__":
     optparser.add_option("-o", "--outDir", default=None)
     optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
+    optparser.add_option("-b", "--baseline", default=-1, type=int)
     #optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("-n", "--develFolds", type=int, default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")

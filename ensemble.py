@@ -103,12 +103,13 @@ def buildFeatures(protein, label, predKeys, predictions, confidences, counts):
         if key in predictions:
             features["pos:" + key] = 1
             if key in confidences:
-                features["conf:" + key] = confidences[key].get(label)
+                if label in confidences[key]:
+                    features["conf:" + key] = confidences[key].get(label)
         else:
             features["neg:" + key] = 1
     return features
 
-def buildExamples(proteins, predKeys=None, limitToSets=None, limitTerms=None, outDir=None):
+def buildExamples(proteins, predKeys, limitToSets=None, limitTerms=None, outDir=None):
     counts = defaultdict(int)
     empty = {}
     examples = {"classes":[], "features":[], "sets":[], "proteins":[], "labels":[]}
@@ -220,17 +221,17 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     testExamples = getSubset(examples, ["test"])
     testPredictions = clf.predict(testExamples["features"])
     testProbabilities = clf.predict_proba(testExamples["features"])
-    binaryToMultiLabel(testExamples, testPredictions, testProbabilities)
+    binaryToMultiLabel(testExamples, testPredictions, testProbabilities, predKey)
     print "Evaluating test set ensemble predictions"
     testProteins = {x["id"]:x for x in testExamples["proteins"]}
     multiLabelTestExamples = evaluateFile.makeExamples(testProteins, limitTerms=limitTerms, limitToSets=["test"], predKey=predKey)
     loading.vectorizeExamples(multiLabelTestExamples, None)
     results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True)
-    print "Average:", evaluation.metricsToString(results["average"])
+    print "Average for test set:", evaluation.metricsToString(results["average"])
     print "Predicting all examples"
     allPredictions = clf.predict(examples["features"])
     allProbabilities = clf.predict_proba(examples["features"])
-    binaryToMultiLabel(testExamples, allPredictions, allProbabilities)
+    binaryToMultiLabel(testExamples, allPredictions, allProbabilities, predKey)
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True):
     if outDir != None:
@@ -258,28 +259,25 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     loading.loadSplit(os.path.join(dataPath, "data"), proteins)
     loading.defineSets(proteins, "overlap" if useCafa else "skip")
     
+    predKeys = []
     if nnInput != None:
         print "Loading neural network predictions from", nnInput
         for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
             evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred", confKey="nn_pred_conf")
+        predKeys += ["nn_pred"]
     if clsInput != None:
         print "Loading classifier predictions"
         evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
+        predKeys += ["cls_pred"]
     if baselineCutoff > 0:
         print "Loading baseline predictions"
         loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, limitTerms, useCafa=useCafa)
+        predKeys += ["baseline_pred"]
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 
         combKey = "comb_pred"
         combConfKey = "comb_pred_conf"
-        predKeys = [] #["nn_pred", "cls_pred"]
-        if nnInput != None:
-            predKeys += ["nn_pred"]
-        if clsInput != None:
-            predKeys += ["cls_pred"]
-        if baselineCutoff > 0:
-            predKeys += ["baseline_pred"]
         combinations = getCombinations(predKeys)
         print "Testing", len(combinations), "combinations"
         for combination in combinations:
@@ -300,10 +298,9 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     if useLearning:
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)
-        examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=None, limitTerms=limitTerms, outDir=outDir)
+        examples = buildExamples(proteins, predKeys, limitToSets=None, limitTerms=limitTerms, outDir=outDir)
         learn(examples, Classifier, classifierArgs, develFolds=develFolds, limitTerms=limitTerms, predKey="ml_comb_pred")
         if useOutFiles:
-            combString = "-".join(combination)
             for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
                 outPath = os.path.join(outDir, "-".join([setName, "ML", "ensemble"]) + ".tsv.gz")
                 evaluation.saveProteins(proteins, outPath, limitTerms=limitTerms, limitToSets=[setName], predKey="ml_comb_pred") #pass#evaluation.saveResults(data, outStem, label_names, negatives)

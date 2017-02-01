@@ -102,24 +102,28 @@ def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="
                 continue
             counts["proteins"] += 1
             goldLabels = protein["terms"].keys()
-            predLabels = protein[predKey].keys()
+            if predKey not in protein:
+                counts["proteins-with-no-predictions"] += 1
+            predLabels = protein.get(predKey, {}).keys()
             if limitTerms:
                 filtered["labels"].update([x for x in goldLabels if x not in limitTerms])
                 goldLabels = [x for x in goldLabels if x in limitTerms]
                 filtered["predictions"].update([x for x in predLabels if x not in limitTerms])
                 predLabels = [x for x in predLabels if x in limitTerms]
             allLabels = sorted(set(goldLabels + predLabels))
+            predLabels = set(predLabels)
+            goldLabels = set(goldLabels)
             cafa_ids = ",".join(protein["cafa_ids"])
             predConf = protein.get(predKey + "_conf", {})
-            predSources = protein.get(predKey + "_sources", [])
+            predSources = protein.get(predKey + "_sources", {})
             hasPred = False
             hasGold = False
             seenSources = set()
             for label in allLabels:
-                pred = 1 if label in protein[predKey] else 0
+                pred = 1 if label in predLabels else 0
                 if pred == 1:
                     hasPred = True
-                gold = 1 if label in protein["terms"] else 0
+                gold = 1 if label in goldLabels else 0
                 if gold == 1:
                     hasGold = True
                 conf = predConf.get(label, 0.75) if (pred == 1) else 0 # Use an average confidence for BLAST baseline transfer

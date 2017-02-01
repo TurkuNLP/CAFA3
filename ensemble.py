@@ -35,7 +35,7 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
             continue
         counts["proteins"] += 1
         protein[combKey] = {}
-        if mode == "OR":
+        if mode == "OR" or mode == "SINGLE":
             for key in predKeys:
                 if key in protein:
                     counts["predictions-mode-" + mode] += 1
@@ -56,15 +56,15 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
                 #pred1 = set(protein[key1].keys())
                 #pred2 = set(protein[key2].keys())
                 protein[combKey] = {x:1 for x in set.intersection(*predLabelSets)} #{x:1 for x in pred1.intersection(pred2)}
-            else:
-                protein[combKey] = {}
-        else:
-            key = predKeys[0] #key1 if mode == "ONLY1" else key2
-            if key not in protein:
-                counts["no-prediction-for-" + key] += 1
-            else:
-                counts["predictions-mode-" + mode] += 1
-                protein[combKey] = protein[key]
+#             else:
+#                 protein[combKey] = {}
+#         else:
+#             key = predKeys[0] #key1 if mode == "ONLY1" else key2
+#             if key not in protein:
+#                 counts["no-prediction-for-" + key] += 1
+#             else:
+#                 counts["predictions-mode-" + mode] += 1
+#                 protein[combKey] = protein[key]
                 
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
 

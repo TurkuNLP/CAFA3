@@ -86,6 +86,18 @@ def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
             break
     return s
 
+def saveProteins(proteins, outPath, limitToSets=None, predKey="predictions"):
+    protIds = sorted(proteins.keys())
+    protObjs = [proteins[key] for key in protIds]
+    with gzip.open(outPath, "wt") as f:
+        dw = csv.DictWriter(f, ["id", "label_index", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
+        dw.writeheader()
+        for protein in protObjs:
+            rows = []
+            if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
+                continue
+            
+
 def saveResults(data, outStem, label_names, negatives=False):
     print "Writing results to", outStem + "-results.tsv"
     with open(outStem + "-results.tsv", "wt") as f:

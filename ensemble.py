@@ -10,11 +10,12 @@ from utils import Stream
 from sklearn.grid_search import GridSearchCV
 import itertools
 
-def clearKey(proteins, key):
+def clearKeys(proteins, keys):
     for protId in proteins:
         protein = proteins[protId]
-        if key in protein:
-            del protein[key]
+        for key in keys:
+            if key in protein:
+                del protein[key]
 
 def getCombinations(items):
     combinations = []
@@ -23,6 +24,16 @@ def getCombinations(items):
         combinations.extend(els)
     return combinations
 
+def combineConf(protein, predKey, combKey):
+    labels = protein.get(predKey, {}).keys()
+    predConfs = protein.get(predKey + "_conf", {})
+    combConfs =  protein[combKey + "_conf"]
+    for label in labels:
+        if label not in combConfs:
+            combConfs[label] = []
+        predConf = predConfs.get(label)
+        combConfs[label].append(predConf)
+                        
 def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
     assert mode in ("AND", "OR", "SINGLE")
     if mode == "SINGLE":
@@ -34,12 +45,17 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
             counts["out-of-sets"] += 1
             continue
         counts["proteins"] += 1
+        assert combKey not in protein
         protein[combKey] = {}
+        combConfKey = combKey + "_conf"
+        assert combConfKey not in protein
+        protein[combConfKey] = {}
         if mode == "OR" or mode == "SINGLE":
             for key in predKeys:
                 if key in protein:
                     counts["predictions-mode-" + mode] += 1
                     protein[combKey].update(protein[key])
+                    combineConf(protein, key, combKey)
                 else:
                     counts["no-prediction-for-" + key] += 1
         elif mode == "AND":
@@ -161,7 +177,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
     print "Average:", evaluation.metricsToString(results["average"])
     
-def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True):
     if outDir != None:
         if clear and os.path.exists(outDir):
             print "Removing output directory", outDir
@@ -200,7 +216,8 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 
-        combKey = "combined"
+        combKey = "comb_pred"
+        combConfKey = "comb_pred_conf"
         predKeys = [] #["nn_pred", "cls_pred"]
         if nnInput != None:
             predKeys += ["nn_pred"]
@@ -212,15 +229,17 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         print "Testing", len(combinations), "combinations"
         for combination in combinations:
             print "******", "Combination", combination, "******"
-            for setName in ("devel", "test"):
-                for mode in (("AND", "OR") if len(combination) > 1 else ("SINGLE",)):
-                    print "***", "Evaluating predictions for set '" + setName + "' using mode '" + mode + "'", "***"
+            for mode in (("AND", "OR") if len(combination) > 1 else ("SINGLE",)):
+                for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+                    print "***", "Evaluating", combination, "predictions for set '" + setName + "' using mode '" + mode + "'", "***"
                     combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
                     examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
                     loading.vectorizeExamples(examples, None)
                     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
                     print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
-    
+                    if useOutFiles:
+                        pass#evaluation.saveResults(data, outStem, label_names, negatives)
+                    clearKeys(proteins, [combKey, combConfKey])
     if useLearning:
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)
@@ -240,6 +259,7 @@ if __name__=="__main__":
     optparser.add_option("-f", "--baseline", default=-1, type=int)
     optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels")
     #optparser.add_option("-w", "--write", default="OR")
+    optparser.add_option("-w", "--write", default=False, action="store_true")
     optparser.add_option("-n", "--develFolds", type=int, default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
@@ -251,4 +271,4 @@ if __name__=="__main__":
     combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput, outDir=options.outDir,
             classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
             useCombinations=options.simple, useLearning=options.learning, baselineCutoff=options.baseline,
-            numTerms=options.terms, clear=options.clear)
+            numTerms=options.terms, clear=options.clear, useOutFiles=options.write)

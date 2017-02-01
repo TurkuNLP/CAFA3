@@ -50,12 +50,13 @@ def limitExamples(examples, limitToSets):
     for key in ("labels", "predictions"):
         examples[key] = examples[key][indices]
 
-def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predictions", confKey=None):
+def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predictions", confKey=None, includeDuplicates=False):
     print "Loading predictions from", inPath
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
         protein = None
-        counts = {"duplicates":0, predKey:0, "protein-not-loaded":0, "out-of-sets":0}
+        rowCountKey = "rows:" + predKey
+        counts = {"duplicates":0, "duplicates-preserved":0, rowCountKey:0, "protein-not-loaded":0, "out-of-sets":0}
         currentId = None
         for row in reader:
             if currentId != row["id"]:
@@ -65,16 +66,21 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
                     if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
                         counts["out-of-sets"] += 1
                         protein = None
-                    elif predKey in protein:
+                    elif predKey in protein and not includeDuplicates:
                         counts["duplicates"] += 1
                         protein = None
                     else:
-                        counts[predKey] += 1
-                        protein[predKey] = {}
-                        if confKey != None:
+                        if predKey in protein:
+                            counts["duplicates"] += 1
+                            counts["duplicates-preserved"] += 1
+                        else:
+                            protein[predKey] = {}
+                        counts[rowCountKey] += 1
+                        if confKey != None and confKey not in protein:
                             protein[confKey] = {}
                         if readGold:
-                            assert "gold" not in protein
+                            if not includeDuplicates:
+                                assert "gold" not in protein
                             protein["gold"] = {}
                 else:
                     counts["protein-not-loaded"] += 1

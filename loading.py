@@ -272,8 +272,8 @@ def saveFeatureNames(names, outPath):
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
     
-def vectorizeExamples(examples, featureGroups):
-    mlb = MultiLabelBinarizer()  
+def vectorizeExamples(examples, featureGroups, sparseLabels=False):
+    mlb = MultiLabelBinarizer(sparse_output=sparseLabels)  
     if "predictions" in examples and examples["predictions"] != None:
         #examples["labels"] = mlb.fit_transform(examples["labels"])
         #examples["predictions"] = examples["labels"]
@@ -297,4 +297,4 @@ def vectorizeExamples(examples, featureGroups):
         examples["features"] = VarianceThreshold(threshold * (1 - threshold)).fit_transform(examples["features"])
         print "Selected features", examples["features"].shape[1]
         #examples["features"] = SelectKBest(chi2, k=1000).fit_transform(examples["features"], examples["labels"])
-    print "Vectorized", len(examples["labels"]), "examples with", len(examples["feature_names"]), "unique features and", len(examples["label_names"]), "unique labels"
+    print "Vectorized", examples["labels"].shape[0], "examples with", len(examples["feature_names"]), "unique features and", len(examples["label_names"]), "unique labels", ("(sparse)" if sparseLabels else "")

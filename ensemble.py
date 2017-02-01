@@ -81,20 +81,8 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
                     predLabelSets.append(set(protein[key].keys()))
             if not missing:
                 counts["predictions-mode-" + mode] += 1
-                #pred1 = set(protein[key1].keys())
-                #pred2 = set(protein[key2].keys())
                 protein[combKey] = {x:1 for x in set.intersection(*predLabelSets)} #{x:1 for x in pred1.intersection(pred2)}
-        combineConf(protein, sorted(protein[combKey].keys()), predKeys, combKey)
-#             else:
-#                 protein[combKey] = {}
-#         else:
-#             key = predKeys[0] #key1 if mode == "ONLY1" else key2
-#             if key not in protein:
-#                 counts["no-prediction-for-" + key] += 1
-#             else:
-#                 counts["predictions-mode-" + mode] += 1
-#                 protein[combKey] = protein[key]
-                
+        combineConf(protein, sorted(protein[combKey].keys()), predKeys, combKey)            
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
 
 def buildFeatures(protein, label, predKeys, predictions, confidences, counts):
@@ -147,37 +135,6 @@ def buildExamples(proteins, predKeys, limitToSets=None, limitTerms=None, outDir=
             examples["sets"].append(protSets)
             examples["proteins"].append(protein)
             examples["labels"].append(label)       
-#         if key1 not in protein:
-#             counts["no-prediction-for-" + key1] += 1
-#         if key2 not in protein:
-#             counts["no-prediction-for-" + key2] += 1
-#         pred1 = protein.get(key1, empty)
-#         pred2 = protein.get(key2, empty)
-#         conf1 = protein.get(key1 + "_conf", empty)
-#         conf2 = protein.get(key2 + "_conf", empty)
-#         
-#         #for label in goldLabels:
-#         #    if label not in examples["label_size"]:
-#         #        examples["label_size"][label] = 0
-#         #    examples["label_size"][label] += 1
-#         for label in allLabels:
-#             features = {} #{label:1}
-#             features[label] = 1
-#             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
-#                 if label in pred:
-#                     #assert label in conf, (key, pred, conf, counts)
-#                     features["pos:" + key] = 1
-#                     features["conf:" + key] = conf[label]
-#                 else:
-#                     features["neg:" + key] = 1
-#             cls = 1 if label in goldLabels else 0
-#             counts["examples"] += 1
-#             counts["pos" if cls == 1 else "neg"] += 1
-#             examples["classes"].append(cls)
-#             examples["features"].append(features)
-#             examples["sets"].append(protSets)
-#             examples["proteins"].append(protein)
-#             examples["labels"].append(label)
     print "Built examples,", dict(counts)
     dv = DictVectorizer(sparse=True)
     examples["features"] = dv.fit_transform(examples["features"])
@@ -247,7 +204,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     proteins = {}
     print "Loading Swissprot proteins"
     loading.loadFASTA(os.path.join(dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    if useCafa == "cafa":
+    if useCafa:
         print "Loading CAFA3 targets"
         loading.loadFASTA(os.path.join(dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
@@ -263,7 +220,8 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     if nnInput != None:
         print "Loading neural network predictions from", nnInput
         for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
-            evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred", confKey="nn_pred_conf")
+            predKey = "nn_pred_cafa" if setName == "cafa" else "nn_pred"
+            evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey=predKey, confKey="nn_pred_conf", includeDuplicates=True)
         predKeys += ["nn_pred"]
     if clsInput != None:
         print "Loading classifier predictions"
@@ -279,17 +237,24 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         combKey = "comb_pred"
         combConfKey = "comb_pred_conf"
         combinations = getCombinations(predKeys)
-        print "Testing", len(combinations), "combinations"
-        for combination in combinations:
-            print "******", "Combination", combination, "******"
-            for mode in (("AND", "OR") if len(combination) > 1 else ("SINGLE",)):
+        numCombinations = len(combinations)
+        print "Testing", numCombinations, "combinations"
+        for i in range(len(combinations)):
+            print "******", "Combination", str(i + 1) + "/" + str(numCombinations), combinations[i], "******"
+            for mode in (("AND", "OR") if len(combinations[i]) > 1 else ("SINGLE",)):
                 for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+                    combination = combinations[i][:]
+                    if setName == "cafa" and "nn_pred" in combination:
+                        combination[combination.index("nn_pred")] = "nn_pred_cafa"
                     print "***", "Evaluating", combination, "predictions for set '" + setName + "' using mode '" + mode + "'", "***"
                     combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
-                    examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
-                    loading.vectorizeExamples(examples, None)
-                    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
-                    print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
+                    if setName != "cafa":
+                        examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
+                        loading.vectorizeExamples(examples, None)
+                        results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+                        print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
+                    else:
+                        print "Skipping evaluation for set '" + setName + "'"
                     if useOutFiles:
                         combString = "-".join(combination)
                         outPath = os.path.join(outDir, "-".join([combString, setName, mode, "ensemble"]) + ".tsv.gz")
@@ -307,27 +272,26 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
 
 if __name__=="__main__":       
     from optparse import OptionParser
-    optparser = OptionParser(description="Combine relation predictions (All input files must include both positive and negative interaction elements)")
-    optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
-    optparser.add_option("-a", "--nnInput", default=None)
-    optparser.add_option("-b", "--clsInput", default=None)
-    optparser.add_option("-g", "--gold", default=None)
-    optparser.add_option("-o", "--outDir", default=None)
-    optparser.add_option("-s", "--simple", default=False, action="store_true")
-    optparser.add_option("-l", "--learning", default=False, action="store_true")
-    optparser.add_option("-f", "--baseline", default=-1, type=int)
+    optparser = OptionParser(description="Ensemble")
+    optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="Data directory")
+    optparser.add_option("-a", "--nnInput", default=None, help="Neural network predictions tsv.gz file")
+    optparser.add_option("-b", "--clsInput", default=None, help="Classifier predictions tsv.gz file")
+    optparser.add_option("-o", "--outDir", default=None, help="Output directory")
+    optparser.add_option("-s", "--simple", default=False, action="store_true", help="Do simple ensembles (AND, OR and SINGLE)")
+    optparser.add_option("-l", "--learning", default=False, action="store_true", help="Do machine learning ensemble")
+    optparser.add_option("-f", "--baseline", default=-1, type=int, help="Add the BLAST baseline as the third set of predictions. Value in range 1-10, 1 for all values.")
     optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels")
-    #optparser.add_option("-w", "--write", default="OR")
-    optparser.add_option("-w", "--write", default=False, action="store_true")
-    optparser.add_option("-n", "--develFolds", type=int, default=5)
-    optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
-    optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
+    optparser.add_option("-w", "--write", default=False, action="store_true", help="Write output files")
+    optparser.add_option("-n", "--develFolds", type=int, default=5, help="Cross-validation for parameter optimization")
+    optparser.add_option('-c','--classifier', default="ensemble.RandomForestClassifier", help="Scikit-learn classifier")
+    optparser.add_option('-r','--args', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}", help="Classifier arguments")
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
+    optparser.add_option("--cafa", default=False, action="store_true", help="Process CAFA predictions")
     (options, args) = optparser.parse_args()
     
-    #assert options.write in ("AUTO", "LEARN", "AND", "OR")
     options.args = eval(options.args)
     combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput, outDir=options.outDir,
             classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
+            useCafa=options.cafa,
             useCombinations=options.simple, useLearning=options.learning, baselineCutoff=options.baseline,
             numTerms=options.terms, clear=options.clear, useOutFiles=options.write)

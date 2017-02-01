@@ -10,7 +10,7 @@ from sklearn.feature_selection.variance_threshold import VarianceThreshold
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
 
-def loadBaseline(inPath, proteins, key="baseline"):
+def loadBaseline(inPath, proteins, key="baseline", cutoff=1):
     baselinePath = os.path.join(inPath, "fallback")
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
@@ -22,6 +22,11 @@ def loadBaseline(inPath, proteins, key="baseline"):
             tsv = csv.reader(f, delimiter='\t')
             for row in tsv:
                 protId, goTerm, blastCount = row
+                blastCount = int(blastCount)
+                if blastCount < cutoff:
+                    counts["skipped-total"] += 1
+                    counts["skipped-" + str(blastCount)] += 1
+                    continue
                 protein = proteins[protId]
                 if key not in protein:
                     protein[key] = {}

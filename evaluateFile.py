@@ -19,7 +19,7 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         labels = protein["terms"].keys()
         labels = sorted(labels)
         if limitTerms:
-            filtered["labels"].add([x for x in labels if x not in limitTerms])
+            filtered["labels"].update([x for x in labels if x not in limitTerms])
             labels = [x for x in labels if x in limitTerms]
         for label in labels:
             if label not in examples["label_size"]:
@@ -30,10 +30,11 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         examples["cafa_ids"].append(protein["cafa_ids"])
         examples["sets"].append(protein["sets"])
         if predKey != None:
-            examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
+            predictions = sorted(protein.get(predKey, {}).keys())
             if limitTerms:
-                filtered["labels"].add([x for x in examples["predictions"] if x not in limitTerms])
-                examples["predictions"] = [x for x in examples["predictions"] if x in limitTerms]
+                filtered["labels"].update([x for x in predictions if x not in limitTerms])
+                predictions = [x for x in predictions if x in limitTerms]
+            examples["predictions"].append(predictions)
     #for protein in protObjs:
     #    examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
     #    #for pred in examples["predictions"][-1]:

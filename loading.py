@@ -10,7 +10,7 @@ from sklearn.feature_selection.variance_threshold import VarianceThreshold
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
 
-def loadBaseline(inPath, proteins, key="baseline", cutoff=1, terms=None):
+def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None):
     baselinePath = os.path.join(inPath, "fallback")
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
@@ -35,10 +35,12 @@ def loadBaseline(inPath, proteins, key="baseline", cutoff=1, terms=None):
                 baselineTerms.add(goTerm)
                 counts[blastCount] += 1
     counts["unique-terms"] = len(baselineTerms)
-    if terms != None:
-        counts["top-terms"] = len(terms)
+    if limitTerms != None:
+        counts["top-terms"] = len(limitTerms)
+        #print list(baselineTerms)[0:10]
+        #print terms.keys()[0:10]
         for goTerm in baselineTerms:
-            if goTerm not in terms:
+            if goTerm not in limitTerms:
                 counts["out-of-top-terms"] += 1
             else:
                 counts["included-in-top-terms"] += 1

@@ -55,7 +55,7 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
                 counts["predictions-mode-" + mode] += 1
                 #pred1 = set(protein[key1].keys())
                 #pred2 = set(protein[key2].keys())
-                protein[combKey] = {x:1 for x in set.intersection(predLabelSets)} #{x:1 for x in pred1.intersection(pred2)}
+                protein[combKey] = {x:1 for x in set.intersection(*predLabelSets)} #{x:1 for x in pred1.intersection(pred2)}
             else:
                 protein[combKey] = {}
         else:
@@ -161,7 +161,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
     print "Average:", evaluation.metricsToString(results["average"])
     
-def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, clear=False):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False):
     if outDir != None:
         if clear and os.path.exists(outDir):
             print "Removing output directory", outDir
@@ -181,7 +181,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     print "Proteins:", len(proteins)
     termCounts = loading.loadAnnotations(os.path.join(dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)
-    topTerms = loading.getTopTerms(termCounts, 5000)
+    topTerms = loading.getTopTerms(termCounts, numTerms)
     limitTerms=set([x[0] for x in topTerms])
     print "Using", len(topTerms), "most common GO terms"
     loading.loadSplit(os.path.join(dataPath, "data"), proteins)
@@ -196,12 +196,12 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
     if baselineCutoff > 0:
         print "Loading baseline predictions"
-        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, topTerms)
+        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, limitTerms)
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 
         combKey = "combined"
-        predKeys = ["nn_pred", "cls_pred"]
+        predKeys = [] #["nn_pred", "cls_pred"]
         if nnInput != None:
             predKeys += ["nn_pred"]
         if clsInput != None:
@@ -238,6 +238,7 @@ if __name__=="__main__":
     optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
     optparser.add_option("-f", "--baseline", default=-1, type=int)
+    optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels")
     #optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("-n", "--develFolds", type=int, default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
@@ -250,4 +251,4 @@ if __name__=="__main__":
     combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput, outDir=options.outDir,
             classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
             useCombinations=options.simple, useLearning=options.learning, baselineCutoff=options.baseline,
-            clear=options.clear)
+            numTerms=options.terms, clear=options.clear)

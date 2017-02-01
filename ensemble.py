@@ -24,15 +24,27 @@ def getCombinations(items):
         combinations.extend(els)
     return combinations
 
-def combineConf(protein, predKey, combKey):
-    labels = protein.get(predKey, {}).keys()
-    predConfs = protein.get(predKey + "_conf", {})
-    combConfs =  protein[combKey + "_conf"]
-    for label in labels:
-        if label not in combConfs:
-            combConfs[label] = []
-        predConf = predConfs.get(label)
-        combConfs[label].append(predConf)
+def mean(numbers):
+    return float(sum(numbers)) / max(len(numbers), 1)
+
+def combineConf(protein, labels, predKeys, combKey):
+    combConfKey = combKey + "_conf"
+    assert combConfKey not in protein
+    protein[combConfKey] = {}
+    combConfs = protein[combConfKey]
+    assert "ensemble" not in protein
+    protein["ensemble"] = {}
+    combSources = protein["ensemble"]
+    for key in predKeys:
+        predConfs = protein.get(key + "_conf", {})
+        for label in labels:
+            if label not in combConfs:
+                combConfs[label] = []
+                combSources[label] = []
+            predConf = predConfs.get(label)
+            combConfs[label].append(predConf)
+            combSources[label].append(key)
+    protein[combConfKey] = {x:mean(combConfs[x]) for x in combConfs}
                         
 def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
     assert mode in ("AND", "OR", "SINGLE")
@@ -47,15 +59,11 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
         counts["proteins"] += 1
         assert combKey not in protein
         protein[combKey] = {}
-        combConfKey = combKey + "_conf"
-        assert combConfKey not in protein
-        protein[combConfKey] = {}
         if mode == "OR" or mode == "SINGLE":
             for key in predKeys:
                 if key in protein:
                     counts["predictions-mode-" + mode] += 1
                     protein[combKey].update(protein[key])
-                    combineConf(protein, key, combKey)
                 else:
                     counts["no-prediction-for-" + key] += 1
         elif mode == "AND":
@@ -72,6 +80,7 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
                 #pred1 = set(protein[key1].keys())
                 #pred2 = set(protein[key2].keys())
                 protein[combKey] = {x:1 for x in set.intersection(*predLabelSets)} #{x:1 for x in pred1.intersection(pred2)}
+        combineConf(protein, sorted(protein[combKey].keys()), predKeys, combKey)
 #             else:
 #                 protein[combKey] = {}
 #         else:
@@ -239,7 +248,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                     print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
                     if useOutFiles:
                         pass#evaluation.saveResults(data, outStem, label_names, negatives)
-                    clearKeys(proteins, [combKey, combConfKey])
+                    clearKeys(proteins, [combKey, combConfKey, "ensemble"])
     if useLearning:
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)

@@ -14,9 +14,10 @@ import cPickle as pickle
 from collections import defaultdict
 
 from stats import pairwise
-from train import generate_data, _get_ids, read_feature_json
+from train import generate_data, _get_ids, read_feature_json, get_annotation_ids, get_annotation_dict, read_split_ids, _data_size, save_predictions, weighted_binary_crossentropy
 
 
+# FIXME: These should always match to the model and should be saved as a config file
 ann_limit = 5000 # Taking top N GO annotations only
 timesteps = 2500 # maximum length of a sequence, the real max is 35K. 2.5K covers 99% of the sequences, 5K 99.9%
 latent_dim = 50 # Amino acid embedding size
@@ -31,56 +32,16 @@ out_dir = model_dir
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
-def get_annotation_ids(annotation_path, top=None):
-    """
-    Maps GO ids to integers.
-    """
-    ann_file = gzip.open(annotation_path)
-    ann_data = ann_file.readlines()
-    annotations = defaultdict(int)
-    for line in ann_data:
-        annotations[line.strip().split('\t')[1]] += 1
-    
-    if top:
-        annotations = [a[0] for a in sorted(annotations.items(), key=lambda x: x[1], reverse=True)[:top]]
-    else:
-        annotations = annotations.keys()
-    
-    
-    ann_ids = {a: i for i, a in enumerate(annotations)}
-    reverse_ann_ids = {i: a for a, i in ann_ids.items()}
-    
-    return ann_ids, reverse_ann_ids
-
-def get_annotation_dict(annotation_data):
-    """
-    Maps sequence ids to a list of GO ids.
-    """
-    ann_dict = defaultdict(list)
-    for line in annotation_data:
-        prot_id, annotation, evidence = line.strip().split('\t')
-        ann_dict[prot_id].append(annotation)
-    return ann_dict
-
-def read_split_ids(split_path, unique=True):
-    split_file = gzip.open(split_path)
-    split_data = [s.strip().replace('>', '') for s in split_file]
-    if unique:
-        split_data = set(split_data)
-    return split_data
-
 if use_features:
     json_vectorizer = pickle.load(open(os.path.join(model_dir, 'json_vectorizer.pkl', 'rb')))
     feature_selector = pickle.load(open(os.path.join(model_dir, 'feature_selector.pkl', 'rb')))
     json_feature_matrix, json_id_map, _, _ = read_feature_json(vectorizer=json_vectorizer, feature_selector=feature_selector)
 
-def _data_size(path):
-    return len(gzip.open(path).readlines())
-
-def train():
-    print 'Generating training data'
+def predict():
+    print 'Generating data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
-    ann_ids, reverse_ann_ids = get_annotation_ids(ann_path, top=ann_limit)
+    ann_ids = pickle.load(open(os.path.join(model_dir, 'ann_ids.pkl', 'rb')))
+    reverse_ann_ids = pickle.load(open(os.path.join(model_dir, 'reverse_ann_ids.pkl', 'rb')))
     
     devel_path = './data/devel.txt.gz'
     devel_data = generate_data(devel_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
@@ -131,43 +92,5 @@ def train():
     
     print 'All done.'
     
-
-def save_predictions(out_path, prot_ids, predictions, reverse_ann_ids, cafa_targets=False):
-    """
-    Saves predictions in tsv format
-    """
-    import csv
-    with gzip.open(out_path, 'wb') as csvfile:
-        writer = csv.writer(csvfile, delimiter='\t',
-                                quotechar='|', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(['id', 'label_index', 'label', 'predicted', 'confidence', 'cafa_ids']) # Header line
-        
-        for i, prot_id in enumerate(prot_ids):
-            if i % 10000 == 0:
-                print i
-            pred_indices = np.round(predictions[i]).nonzero()[0]
-            if len(pred_indices) > 1500:
-                print 'WARNING: Maximum GO amount exceeded!'
-                import pdb; pdb.set_trace()
-            for pred_i in pred_indices:
-                go_id = reverse_ann_ids[pred_i]
-                confidence = predictions[i, pred_i]
-                if cafa_targets:
-                    cafa_id, p_id = prot_id.split(' ')
-                    writer.writerow([p_id, pred_i, go_id, 1, '%.2f' % confidence, cafa_id])
-                else:
-                    writer.writerow([prot_id, pred_i, go_id, 1, '%.2f' % confidence, ''])
-
-    
-def weighted_binary_crossentropy(target, output):
-    from keras.backend.common import _EPSILON
-    from keras import backend as K
-    from theano import tensor as T
-    from theano.tensor import basic as tensor
-    pos_weight = 3.0 # 73 is roughly the inverse ratio of positives examples
-    output = T.clip(output, _EPSILON, 1.0 - _EPSILON)
-    ce = -(pos_weight * target * tensor.log(output) + (1.0 - target) * tensor.log(1.0 - output))
-    return K.mean(ce, axis=-1)
-    
 if __name__ == '__main__':
-    train()
+    predict()

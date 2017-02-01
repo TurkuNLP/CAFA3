@@ -10,12 +10,15 @@ from sklearn.feature_selection.variance_threshold import VarianceThreshold
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
 
-def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None):
+def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None, useCafa=False):
     baselinePath = os.path.join(inPath, "fallback")
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
     baselineTerms = set()
-    for filename in ("Swissprot_sequence.go_count.tsv.gz",):
+    filenames = ["Swissprot_sequence.go_count.tsv.gz"]
+    if useCafa:
+        filenames.append("target_all.go_count.tsv.gz")
+    for filename in filenames:
         filePath = os.path.join(baselinePath, filename)
         print "Reading", filePath
         with gzip.open(filePath, "rt") as f:

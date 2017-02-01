@@ -112,14 +112,22 @@ def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="
             cafa_ids = ",".join(protein["cafa_ids"])
             predConf = protein.get(predKey + "_conf", {})
             predSources = protein.get(predKey + "_sources", [])
+            hasPred = False
+            hasGold = False
+            seenSources = set()
             for label in allLabels:
                 pred = 1 if label in protein[predKey] else 0
+                if pred == 1:
+                    hasPred = True
                 gold = 1 if label in protein["terms"] else 0
-                conf = predConf.get(label, 1)
+                if gold == 1:
+                    hasGold = True
+                conf = predConf.get(label, 0.75) if (pred == 1) else 0 # Use an average confidence for BLAST baseline transfer
                 match = getMatch(gold, pred)
                 sources = predSources.get(label, [])
                 for source in sources:
                     counts["source-" + source] += 1
+                    seenSources.add(source)
                 ensemble = ",".join(sources)
                 rows.append({"id":protId, "label_index":None, "label":label, "predicted":pred, "gold":gold,
                              "confidence":conf, "match":getMatch(gold, pred), "cafa_ids":cafa_ids, "ensemble":ensemble})
@@ -127,6 +135,11 @@ def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="
                 counts[match] += 1
                 counts["pred_" + str(pred)] += 1
                 counts["gold_" + str(gold)] += 1
+            if hasPred:
+                counts["proteins-with-predictions"] += 1
+            if hasGold:
+                counts["proteins-with-gold"] += 1
+            counts["proteins-with-sources:" + str(sorted(seenSources))] += 1
             dw.writerows(rows)
     counts.update({"filtered-" + x:len(filtered[x]) for x in filtered})
     print "Results written,", dict(counts)

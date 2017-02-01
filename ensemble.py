@@ -36,15 +36,18 @@ def combineConf(protein, labels, predKeys, combKey):
     protein[combKey + "_sources"] = {}
     combSources = protein[combKey + "_sources"]
     for key in predKeys:
+        preds = protein.get(key, {})
         predConfs = protein.get(key + "_conf", {})
         for label in labels:
-            if label not in combConfs:
-                combConfs[label] = []
-                combSources[label] = []
             predConf = predConfs.get(label)
             if predConf != None:
+                if label not in combConfs:
+                    combConfs[label] = []
                 combConfs[label].append(predConf)
-            combSources[label].append(key)
+            if label in preds:
+                if label not in combSources:
+                    combSources[label] = []
+                combSources[label].append(key)
     protein[combConfKey] = {x:mean(combConfs[x]) for x in combConfs}
                         
 def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
@@ -222,7 +225,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
     if baselineCutoff > 0:
         print "Loading baseline predictions"
-        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, limitTerms)
+        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, limitTerms, useCafa=useCafa)
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 

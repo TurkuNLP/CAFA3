@@ -27,6 +27,10 @@ model_dir = './test_model/' # path for saving model + other required stuff
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
+# TODO: Make predictions for CNN2 and Full3 models
+# TODO: Evaluate prediction files
+# TODO: Do a sanity check for CAFA target predictions
+
 # TODO: Get prediction statistics
 # TODO: Word dropout?
 # TODO: Remove obvious GOs?

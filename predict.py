@@ -14,34 +14,28 @@ import cPickle as pickle
 from collections import defaultdict
 
 from stats import pairwise
-from train import generate_data, _get_ids, read_feature_json, get_annotation_ids, get_annotation_dict, read_split_ids, _data_size, save_predictions, weighted_binary_crossentropy
+from train import generate_data, _get_ids, read_feature_json, get_annotation_ids, get_annotation_dict, read_split_ids, _data_size, save_predictions, weighted_binary_crossentropy, use_features
 
 
-# FIXME: These should always match to the model and should be saved as a config file
-ann_limit = 5000 # Taking top N GO annotations only
-timesteps = 2500 # maximum length of a sequence, the real max is 35K. 2.5K covers 99% of the sequences, 5K 99.9%
-latent_dim = 50 # Amino acid embedding size
+# FIXME: Settings of the model and train.py should always match
 batch_size = 16
-char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
-vocab_size = len(char_set) + 1 # +1 for mask
-char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
-use_features = False # False = only sequence is used for prediction
-model_dir = './cnn2_model/' # path for saving model + other required stuff
+model_dir = './full3_model/' # path for saving model + other required stuff
 out_dir = model_dir
 #out_dir = './test_predictions/'
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 
 if use_features:
-    json_vectorizer = pickle.load(open(os.path.join(model_dir, 'json_vectorizer.pkl', 'rb')))
-    feature_selector = pickle.load(open(os.path.join(model_dir, 'feature_selector.pkl', 'rb')))
+    json_vectorizer = pickle.load(open(os.path.join(model_dir, 'json_vectorizer.pkl'), 'rb'))
+    feature_selector = pickle.load(open(os.path.join(model_dir, 'feature_selector.pkl'), 'rb'))
     json_feature_matrix, json_id_map, _, _ = read_feature_json(vectorizer=json_vectorizer, feature_selector=feature_selector)
-
+    #import pdb; pdb.set_trace()
+    
 def predict():
     print 'Generating data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
-    ann_ids = pickle.load(open(os.path.join(model_dir, 'ann_ids.pkl', 'rb')))
-    reverse_ann_ids = pickle.load(open(os.path.join(model_dir, 'reverse_ann_ids.pkl', 'rb')))
+    ann_ids = pickle.load(open(os.path.join(model_dir, 'ann_ids.pkl'), 'rb'))
+    reverse_ann_ids = pickle.load(open(os.path.join(model_dir, 'reverse_ann_ids.pkl'), 'rb'))
     
     devel_path = './data/devel.txt.gz'
     devel_data = generate_data(devel_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
@@ -83,7 +77,7 @@ def predict():
     cafa_seq_path = '/home/sukaew/CAFA3/CAFA3_targets/target.all.fasta.gz'
     cafa_data = generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=batch_size, cafa_targets=True, verbose=True)
     cafa_size = _data_size(cafa_id_path)
-    cafa_ids = _get_ids(generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=batch_size, cafa_targets=True, verbose=False, endless=True))
+    cafa_ids = _get_ids(generate_data(None, cafa_seq_path, ann_path, ann_ids, batch_size=batch_size, cafa_targets=True, verbose=False, endless=False))
     #import pdb; pdb.set_trace()
     cafa_pred = model.predict_generator(cafa_data, cafa_size)
     

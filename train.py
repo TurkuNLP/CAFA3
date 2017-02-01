@@ -22,8 +22,8 @@ batch_size = 16
 char_set = 'ABCDEFGHIKLMNOPQRSTUVWXYZ'
 vocab_size = len(char_set) + 1 # +1 for mask
 char_dict = {c:i+1 for i,c in enumerate(char_set)} # Index 0 is left for padding
-use_features = True # False = only sequence is used for prediction
-model_dir = './full3_model/' # path for saving model + other required stuff
+use_features = False # False = only sequence is used for prediction
+model_dir = './test_model/' # path for saving model + other required stuff
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
 
@@ -69,7 +69,7 @@ def read_split_ids(split_path, unique=True):
         split_data = set(split_data)
     return split_data
 
-def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256, cafa_targets=False, verbose=False):
+def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256, cafa_targets=False, verbose=False, endless=True):
     """
     Generates NN compatible data.
     """
@@ -134,6 +134,9 @@ def generate_data(split_path, seq_path, ann_path, ann_ids, batch_size=256, cafa_
         
             nn_data = {'sequence': x, 'labels': y, 'features': blast_x, 'prot_ids': np.array(prot_ids)}
             yield nn_data, nn_data
+            
+        if not endless:
+            break
 
 def read_aaindex():
     aa_f = open('/home/sukaew/CAFA3/aaindex/aaindex_table.tsv')
@@ -154,7 +157,7 @@ def read_aaindex():
 
 aa_index_ids, aa_embedding = read_aaindex()
 
-def read_feature_json(path='./data/examples.json.gz'):
+def read_feature_json(path='./data/examples.json.gz', vectorizer=None, feature_selector=None):
     print 'Reading Jaris feature data'
     js = json.load(gzip.open(path))
     
@@ -170,7 +173,11 @@ def read_feature_json(path='./data/examples.json.gz'):
     
     
     from sklearn.feature_extraction import DictVectorizer
-    v = DictVectorizer()
+    if vectorizer:
+        v = vectorizer
+    else:
+        v = DictVectorizer()
+
     feature_matrix = v.fit_transform(js['features'])
     
     id_map = {pid: i for i, pid in enumerate(js['ids'])}
@@ -181,7 +188,10 @@ def read_feature_json(path='./data/examples.json.gz'):
     
     from sklearn.feature_selection import VarianceThreshold
     #import pdb; pdb.set_trace()
-    vt = VarianceThreshold(0.0001).fit(std_matrix)
+    if feature_selector:
+        vt = feature_selector
+    else:
+        vt = VarianceThreshold(0.0001).fit(std_matrix)
     
     better_matrix = vt.transform(std_matrix)
     #good_features = np.array(v.feature_names_)[np.where(vt.transform(std_matrix)==True)]
@@ -246,6 +256,14 @@ def go_to_ids(predictions, ann_ids):
 def _data_size(path):
     return len(gzip.open(path).readlines())
 
+def _get_ids(data_gen):
+    """
+    Needs a data gen with endless=False
+    """
+    ids = [i[0]['prot_ids'] for i in data_gen]
+    ids = list(np.concatenate(ids))
+    return ids
+
 def train():
     print 'Generating training data'
     ann_path = './data/Swissprot_propagated.tsv.gz'
@@ -264,10 +282,10 @@ def train():
     devel_ids = read_split_ids(devel_path, unique=False)
     
     test_path = './data/test.txt.gz'
-    test_data = generate_data(test_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids)
+    test_data = generate_data(test_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
     test_size = _data_size(test_path)
     test_ids = read_split_ids(test_path, unique=False)
-    
+
     #print "Making baseline predictions"
     #import baseline
     #devel_baseline = baseline.predict(devel_data['prot_ids'], blast_dict, ann_path)
@@ -352,12 +370,21 @@ def train():
     print "Making predictions"
     from keras.models import load_model
     model = load_model(filepath=os.path.join(model_dir, 'model.hdf5'), custom_objects={"weighted_binary_crossentropy":weighted_binary_crossentropy})
-    
+
+    # Reinstantiate the data generators, otherwise they are not correctly aligned anymore
+    devel_data = generate_data(devel_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+    test_data = generate_data(test_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+
     devel_score = model.evaluate_generator(devel_data, devel_size)
     test_score = model.evaluate_generator(test_data, test_size)
     print 'Devel l/a/p/r/f: ', devel_score
     print 'Test l/a/p/r/f: ', test_score
-    
+
+
+    # Reinstantiate the data generators, otherwise they are not correctly aligned anymore
+    devel_data = generate_data(devel_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+    test_data = generate_data(test_path, './data/Swissprot_sequence.tsv.gz', ann_path, ann_ids, batch_size)
+
     devel_pred = model.predict_generator(devel_data, devel_size)
     test_pred = model.predict_generator(test_data, test_size)
     

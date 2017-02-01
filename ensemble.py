@@ -97,7 +97,18 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
                 
     print "Combined predictions, mode =", mode, "counts =", dict(counts)
 
-def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDir=None):
+def buildFeatures(protein, label, predKeys, predictions, confidences, counts):
+    features = {label:1}
+    for key in predKeys:
+        if key in predictions:
+            features["pos:" + key] = 1
+            if key in confidences:
+                features["conf:" + key] = confidences[key].get(label)
+        else:
+            features["neg:" + key] = 1
+    return features
+
+def buildExamples(proteins, predKeys=None, limitToSets=None, limitTerms=None, outDir=None):
     counts = defaultdict(int)
     empty = {}
     examples = {"classes":[], "features":[], "sets":[], "proteins":[], "labels":[]}
@@ -106,34 +117,27 @@ def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDi
         if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
             counts["out-of-sets"] += 1
             continue
-        if key1 not in protein:
-            counts["no-prediction-for-" + key1] += 1
-        if key2 not in protein:
-            counts["no-prediction-for-" + key2] += 1
-        pred1 = protein.get(key1, empty)
-        pred2 = protein.get(key2, empty)
-        conf1 = protein.get(key1 + "_conf", empty)
-        conf2 = protein.get(key2 + "_conf", empty)
+        predictions = {}
+        confidences = {}
+        predLabels = []
+        for key in predKeys: # Collect predictions for each system (key)
+            if key not in protein:
+                counts["no-prediction-for-" + key] += 1
+            else:
+                counts["predictions-for-" + key] += 1
+                predLabels.extend(protein[key].keys())
+                predictions[key] = protein[key]
+                confidences[key] = protein.get(key + "_conf", empty)
+        predLabels = sorted(set(predLabels))
+        #predLabels = sorted(set.union(*[predictions[x].keys() for x in predictions])) # + goldLabels))
         protSets = protein.get("sets")
         goldLabels = protein["terms"].keys()
         if limitTerms:
+            predLabels = [x for x in predLabels if x in limitTerms]
             goldLabels = [x for x in goldLabels if x in limitTerms]
-        allLabels = sorted(set(pred1.keys() + pred2.keys())) # + goldLabels))
         goldLabels = set(goldLabels)
-        #for label in goldLabels:
-        #    if label not in examples["label_size"]:
-        #        examples["label_size"][label] = 0
-        #    examples["label_size"][label] += 1
-        for label in allLabels:
-            features = {} #{label:1}
-            features[label] = 1
-            for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
-                if label in pred:
-                    #assert label in conf, (key, pred, conf, counts)
-                    features["pos:" + key] = 1
-                    features["conf:" + key] = conf[label]
-                else:
-                    features["neg:" + key] = 1
+        for label in predLabels:
+            features = buildFeatures(protein, label, predKeys, predictions, confidences, counts)
             cls = 1 if label in goldLabels else 0
             counts["examples"] += 1
             counts["pos" if cls == 1 else "neg"] += 1
@@ -141,7 +145,38 @@ def buildExamples(proteins, key1, key2, limitToSets=None, limitTerms=None, outDi
             examples["features"].append(features)
             examples["sets"].append(protSets)
             examples["proteins"].append(protein)
-            examples["labels"].append(label)
+            examples["labels"].append(label)       
+#         if key1 not in protein:
+#             counts["no-prediction-for-" + key1] += 1
+#         if key2 not in protein:
+#             counts["no-prediction-for-" + key2] += 1
+#         pred1 = protein.get(key1, empty)
+#         pred2 = protein.get(key2, empty)
+#         conf1 = protein.get(key1 + "_conf", empty)
+#         conf2 = protein.get(key2 + "_conf", empty)
+#         
+#         #for label in goldLabels:
+#         #    if label not in examples["label_size"]:
+#         #        examples["label_size"][label] = 0
+#         #    examples["label_size"][label] += 1
+#         for label in allLabels:
+#             features = {} #{label:1}
+#             features[label] = 1
+#             for key, pred, conf in ((key1, pred1, conf1), (key2, pred2, conf2)):
+#                 if label in pred:
+#                     #assert label in conf, (key, pred, conf, counts)
+#                     features["pos:" + key] = 1
+#                     features["conf:" + key] = conf[label]
+#                 else:
+#                     features["neg:" + key] = 1
+#             cls = 1 if label in goldLabels else 0
+#             counts["examples"] += 1
+#             counts["pos" if cls == 1 else "neg"] += 1
+#             examples["classes"].append(cls)
+#             examples["features"].append(features)
+#             examples["sets"].append(protSets)
+#             examples["proteins"].append(protein)
+#             examples["labels"].append(label)
     print "Built examples,", dict(counts)
     dv = DictVectorizer(sparse=True)
     examples["features"] = dv.fit_transform(examples["features"])
@@ -164,7 +199,18 @@ def getSubset(examples, setNames):
     print "Generated example subset for sets", setNames, "with", counts
     return subset
 
-def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs=1, predKey="ensemble", limitTerms=None):
+def binaryToMultiLabel(examples, predictions, probabilities, predKey):
+    print "Converting binary predictions to labels"
+    predKeyConf = predKey + "_conf"
+    for prediction, probability, protein, label in zip(predictions, probabilities, examples["proteins"], examples["labels"]):
+        if predKey not in protein:
+            protein[predKey] = {}
+            protein[predKeyConf] = {}
+        if prediction == 1:
+            protein[predKey][label] = 1
+            protein[predKeyConf][label] = probability
+
+def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs=1, predKey="ml_comb_pred", limitTerms=None):
     print "Parameter grid search"
     develExamples = getSubset(examples, ["devel"])
     clf = GridSearchCV(Classifier(), classifierArgs, cv=develFolds, verbose=verbose, n_jobs=n_jobs, scoring="f1_micro")
@@ -174,21 +220,17 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     testExamples = getSubset(examples, ["test"])
     testPredictions = clf.predict(testExamples["features"])
     testProbabilities = clf.predict_proba(testExamples["features"])
-    predKeyConf = predKey + "_conf"
-    print "Converting binary predictions to labels"
-    for prediction, probability, protein, label in zip(testPredictions, testProbabilities, testExamples["proteins"], testExamples["labels"]):
-        if predKey not in protein:
-            protein[predKey] = {}
-            protein[predKeyConf] = {}
-        if prediction == 1:
-            protein[predKey][label] = 1
-            protein[predKeyConf][label] = probability
+    binaryToMultiLabel(testExamples, testPredictions, testProbabilities)
     print "Evaluating test set ensemble predictions"
-    proteins = {x["id"]:x for x in testExamples["proteins"]}
-    examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=["test"], predKey=predKey)
-    loading.vectorizeExamples(examples, None)
-    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    testProteins = {x["id"]:x for x in testExamples["proteins"]}
+    multiLabelTestExamples = evaluateFile.makeExamples(testProteins, limitTerms=limitTerms, limitToSets=["test"], predKey=predKey)
+    loading.vectorizeExamples(multiLabelTestExamples, None)
+    results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True)
     print "Average:", evaluation.metricsToString(results["average"])
+    print "Predicting all examples"
+    allPredictions = clf.predict(examples["features"])
+    allProbabilities = clf.predict_proba(examples["features"])
+    binaryToMultiLabel(testExamples, allPredictions, allProbabilities)
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True):
     if outDir != None:
@@ -258,8 +300,13 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     if useLearning:
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)
-        examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=["devel", "test"], limitTerms=limitTerms, outDir=outDir)
-        learn(examples, Classifier, classifierArgs, develFolds=develFolds, limitTerms=limitTerms)
+        examples = buildExamples(proteins, "nn_pred", "cls_pred", limitToSets=None, limitTerms=limitTerms, outDir=outDir)
+        learn(examples, Classifier, classifierArgs, develFolds=develFolds, limitTerms=limitTerms, predKey="ml_comb_pred")
+        if useOutFiles:
+            combString = "-".join(combination)
+            for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+                outPath = os.path.join(outDir, "-".join([setName, "ML", "ensemble"]) + ".tsv.gz")
+                evaluation.saveProteins(proteins, outPath, limitTerms=limitTerms, limitToSets=[setName], predKey="ml_comb_pred") #pass#evaluation.saveResults(data, outStem, label_names, negatives)
 
 if __name__=="__main__":       
     from optparse import OptionParser

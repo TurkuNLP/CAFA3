@@ -111,12 +111,13 @@ def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="
             allLabels = sorted(set(goldLabels + predLabels))
             cafa_ids = ",".join(protein["cafa_ids"])
             predConf = protein.get(predKey + "_conf", {})
+            predSources = protein.get(predKey + "_sources", [])
             for label in allLabels:
                 pred = 1 if label in protein[predKey] else 0
                 gold = 1 if label in protein["terms"] else 0
                 conf = predConf.get(label, 1)
                 match = getMatch(gold, pred)
-                sources = protein.get(predKey + "_sources", [])
+                sources = predSources.get(label, [])
                 for source in sources:
                     counts["source-" + source] += 1
                 ensemble = ",".join(sources)

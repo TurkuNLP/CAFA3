@@ -250,7 +250,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                     if useOutFiles:
                         combString = "-".join(combination)
                         outPath = os.path.join(outDir, "-".join([combString, setName, mode, "ensemble"]) + ".tsv.gz")
-                        evaluation.saveProteins(proteins, outPath, limitToSets=[setName], predKey=combKey) #pass#evaluation.saveResults(data, outStem, label_names, negatives)
+                        evaluation.saveProteins(proteins, outPath, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey) #pass#evaluation.saveResults(data, outStem, label_names, negatives)
                     clearKeys(proteins, [combKey, combConfKey, combKey + "_sources"])
     if useLearning:
         print "===============", "Learning", "==============="

@@ -2,6 +2,7 @@ import csv
 import numpy as np
 import gzip
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
+from collections import defaultdict
 
 def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average="micro"):
     print "Evaluating the predictions"
@@ -86,27 +87,48 @@ def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
             break
     return s
 
-def saveProteins(proteins, outPath, limitToSets=None, predKey="predictions"):
+def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="predictions"):
     print "Writing results to", outPath
+    counts = defaultdict(int)
     with gzip.open(outPath, "wt") as f:
         dw = csv.DictWriter(f, ["id", "label_index", "label", "predicted", "confidence", "gold", "match", "cafa_ids", "ensemble"], delimiter='\t')
         dw.writeheader()
+        filtered = {"labels":set(), "predictions":set()}
         for protId in sorted(proteins.keys()):
             protein = proteins[protId]
             rows = []
             if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
+                counts["skipped-proteins"] += 1
                 continue
-            allLabels = sorted(set(protein[predKey].keys()) | set(protein["terms"].keys()))
+            counts["proteins"] += 1
+            goldLabels = protein["terms"].keys()
+            predLabels = protein[predKey].keys()
+            if limitTerms:
+                filtered["labels"].update([x for x in goldLabels if x not in limitTerms])
+                goldLabels = [x for x in goldLabels if x in limitTerms]
+                filtered["predictions"].update([x for x in predLabels if x not in limitTerms])
+                predLabels = [x for x in predLabels if x in limitTerms]
+            allLabels = sorted(set(goldLabels + predLabels))
             cafa_ids = ",".join(protein["cafa_ids"])
             predConf = protein.get(predKey + "_conf", {})
             for label in allLabels:
                 pred = 1 if label in protein[predKey] else 0
                 gold = 1 if label in protein["terms"] else 0
                 conf = predConf.get(label, 1)
-                ensemble = ",".join(protein.get(predKey + "_sources", []))
+                match = getMatch(gold, pred)
+                sources = protein.get(predKey + "_sources", [])
+                for source in sources:
+                    counts["source-" + source] += 1
+                ensemble = ",".join(sources)
                 rows.append({"id":protId, "label_index":None, "label":label, "predicted":pred, "gold":gold,
                              "confidence":conf, "match":getMatch(gold, pred), "cafa_ids":cafa_ids, "ensemble":ensemble})
+                counts["rows"] += 1
+                counts[match] += 1
+                counts["pred_" + str(pred)] += 1
+                counts["gold_" + str(gold)] += 1
             dw.writerows(rows)
+    counts.update({"filtered-" + x:len(filtered[x]) for x in filtered})
+    print "Results written,", dict(counts)
 
 def saveResults(data, outStem, label_names, negatives=False):
     print "Writing results to", outStem + "-results.tsv"

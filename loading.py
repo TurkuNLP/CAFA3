@@ -33,7 +33,9 @@ def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None, us
                 protein = proteins[protId]
                 if key not in protein:
                     protein[key] = {}
-                assert goTerm not in protein[key]
+                #assert goTerm not in protein[key]
+                if goTerm in protein[key]:
+                    counts["duplicates"] += 1
                 protein[key][goTerm] = blastCount
                 baselineTerms.add(goTerm)
                 counts[blastCount] += 1

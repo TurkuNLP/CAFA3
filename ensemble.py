@@ -35,14 +35,14 @@ def combinePred(proteins, predKeys, combKey, mode="AND", limitToSets=None):
             continue
         counts["proteins"] += 1
         protein[combKey] = {}
-        if mode == "AND":
+        if mode == "OR":
             for key in predKeys:
                 if key in protein:
                     counts["predictions-mode-" + mode] += 1
                     protein[combKey].update(protein[key])
                 else:
                     counts["no-prediction-for-" + key] += 1
-        elif mode == "OR":
+        elif mode == "AND":
             missing = False
             predLabelSets = []
             for key in predKeys:
@@ -161,7 +161,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
     print "Average:", evaluation.metricsToString(results["average"])
     
-def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=10, clear=False):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, clear=False):
     if outDir != None:
         if clear and os.path.exists(outDir):
             print "Removing output directory", outDir
@@ -187,11 +187,13 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     loading.loadSplit(os.path.join(dataPath, "data"), proteins)
     loading.defineSets(proteins, "overlap" if useCafa else "skip")
     
-    print "Loading neural network predictions from", nnInput
-    for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
-        evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred", confKey="nn_pred_conf")
-    print "Loading classifier predictions"
-    evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
+    if nnInput != None:
+        print "Loading neural network predictions from", nnInput
+        for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+            evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey="nn_pred", confKey="nn_pred_conf")
+    if clsInput != None:
+        print "Loading classifier predictions"
+        evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
     if baselineCutoff > 0:
         print "Loading baseline predictions"
         loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, topTerms)
@@ -200,8 +202,12 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         print "===============", "Combining predictions", "===============" 
         combKey = "combined"
         predKeys = ["nn_pred", "cls_pred"]
+        if nnInput != None:
+            predKeys += ["nn_pred"]
+        if clsInput != None:
+            predKeys += ["cls_pred"]
         if baselineCutoff > 0:
-            predKeys.append("baseline_pred")
+            predKeys += ["baseline_pred"]
         combinations = getCombinations(predKeys)
         print "Testing", len(combinations), "combinations"
         for combination in combinations:
@@ -209,7 +215,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
             for setName in ("devel", "test"):
                 for mode in (("AND", "OR") if len(combination) > 1 else ("SINGLE",)):
                     print "***", "Evaluating predictions for set '" + setName + "' using mode '" + mode + "'", "***"
-                    combinePred(proteins, "nn_pred", "cls_pred", combKey, mode, limitToSets=[setName])
+                    combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
                     examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
                     loading.vectorizeExamples(examples, None)
                     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
@@ -231,7 +237,7 @@ if __name__=="__main__":
     optparser.add_option("-o", "--outDir", default=None)
     optparser.add_option("-s", "--simple", default=False, action="store_true")
     optparser.add_option("-l", "--learning", default=False, action="store_true")
-    optparser.add_option("-b", "--baseline", default=-1, type=int)
+    optparser.add_option("-f", "--baseline", default=-1, type=int)
     #optparser.add_option("-w", "--write", default="OR")
     optparser.add_option("-n", "--develFolds", type=int, default=5)
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")

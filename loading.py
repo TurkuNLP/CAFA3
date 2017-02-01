@@ -15,7 +15,7 @@ def loadBaseline(inPath, proteins, key="baseline", cutoff=1, terms=None):
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
     baselineTerms = set()
-    for filename in ("Swissprot_sequence.go_count.tsv.gz"):
+    for filename in ("Swissprot_sequence.go_count.tsv.gz",):
         filePath = os.path.join(baselinePath, filename)
         print "Reading", filePath
         with gzip.open(filePath, "rt") as f:

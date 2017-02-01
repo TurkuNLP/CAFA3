@@ -11,6 +11,7 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
     examples = {"predictions":[], "labels":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
     protObjs = [proteins[key] for key in protIds]
+    filtered = {"labels":set(), "predictions":set()}
     for protein in protObjs:
         if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
             continue
@@ -18,6 +19,7 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         labels = protein["terms"].keys()
         labels = sorted(labels)
         if limitTerms:
+            filtered["labels"].add([x for x in labels if x not in limitTerms])
             labels = [x for x in labels if x in limitTerms]
         for label in labels:
             if label not in examples["label_size"]:
@@ -29,11 +31,14 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
         examples["sets"].append(protein["sets"])
         if predKey != None:
             examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
+            if limitTerms:
+                filtered["labels"].add([x for x in examples["predictions"] if x not in limitTerms])
+                examples["predictions"] = [x for x in examples["predictions"] if x in limitTerms]
     #for protein in protObjs:
     #    examples["predictions"].append(sorted(protein.get(predKey, {}).keys()))
     #    #for pred in examples["predictions"][-1]:
     #    #    assert pred in examples["label_size"], pred
-    print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples"
+    print "Converted", len(proteins), "proteins into", len(examples["labels"]), "examples, filtered terms:", {x:len(filtered[x]) for x in filtered}
     return examples
 
 def limitExamples(examples, limitToSets):

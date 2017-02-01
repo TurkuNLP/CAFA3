@@ -194,7 +194,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
     if baselineCutoff > 0:
         print "Loading baseline predictions"
-        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff)
+        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, topTerms)
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 
@@ -243,4 +243,5 @@ if __name__=="__main__":
     options.args = eval(options.args)
     combine(dataPath=options.dataPath, nnInput=options.nnInput, clsInput=options.clsInput, outDir=options.outDir,
             classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
-            useCombinations=options.simple, useLearning=options.learning, clear=options.clear)
+            useCombinations=options.simple, useLearning=options.learning, baselineCutoff=options.baseline,
+            clear=options.clear)

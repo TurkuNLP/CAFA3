@@ -10,11 +10,11 @@ from sklearn.feature_selection.variance_threshold import VarianceThreshold
 def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
 
-def loadBaseline(inPath, proteins, key="baseline", cutoff=1):
+def loadBaseline(inPath, proteins, key="baseline", cutoff=1, terms=None):
     baselinePath = os.path.join(inPath, "fallback")
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
-    terms = set()
+    baselineTerms = set()
     for filename in ("Swissprot_sequence.go_count.tsv.gz"):
         filePath = os.path.join(baselinePath, filename)
         print "Reading", filePath
@@ -32,9 +32,16 @@ def loadBaseline(inPath, proteins, key="baseline", cutoff=1):
                     protein[key] = {}
                 assert goTerm not in protein[key]
                 protein[key][goTerm] = blastCount
-                terms.add(goTerm)
+                baselineTerms.add(goTerm)
                 counts[blastCount] += 1
-    counts["unique-terms"] = len(terms)
+    counts["unique-terms"] = len(baselineTerms)
+    if terms != None:
+        counts["top-terms"] = len(terms)
+        for goTerm in baselineTerms:
+            if goTerm not in terms:
+                counts["out-of-top-terms"] += 1
+            else:
+                counts["included-in-top-terms"] += 1
     print "Loaded baseline,", dict(counts)
 
 def loadAnnotations(inPath, proteins):

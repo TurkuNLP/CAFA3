@@ -65,8 +65,14 @@ def resultIsBetter(original, new, key="average"):
 #     tp = labels.multiply(predicted)
 
 def metricsToString(result, style="%.3f"):
-    return "a/f|p/r|tp/fp/tn/fn = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"] \
-        + "|" + "/".join([str(result.get(x, "-")) for x in ("tp", "fp", "tn", "fn")])
+    hasCounts = any([result.get(x) != None for x in ("tp", "fp", "tn", "fn")])
+    s = "a/f|p/r"
+    if hasCounts:
+        s += "|tp/fp/tn/fn"
+    s += " = " + style % result["auc"] + "/" + style % result["fscore"] + "|" + style % result["precision"] + "/" + style % result["recall"]
+    if hasCounts:
+        s += "|" + "/".join([str(result.get(x, "-")) for x in ("tp", "fp", "tn", "fn")])
+    return s
 
 def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
     count = 0

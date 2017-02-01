@@ -87,21 +87,25 @@ def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
     return s
 
 def saveProteins(proteins, outPath, limitToSets=None, predKey="predictions"):
+    print "Writing results to", outPath
     with gzip.open(outPath, "wt") as f:
-        dw = csv.DictWriter(f, ["id", "label_index", "label", "predicted", "confidence", "gold", "match", "cafa_ids"], delimiter='\t')
+        dw = csv.DictWriter(f, ["id", "label_index", "label", "predicted", "confidence", "gold", "match", "cafa_ids", "ensemble"], delimiter='\t')
         dw.writeheader()
         for protId in sorted(proteins.keys()):
             protein = proteins[protId]
             rows = []
             if limitToSets != None and not any(x in limitToSets for x in protein["sets"]):
                 continue
-            allLabels = sorted(set(protein[predKey].keys()) + set(protein["terms"].keys()))
+            allLabels = sorted(set(protein[predKey].keys()) | set(protein["terms"].keys()))
             cafa_ids = ",".join(protein["cafa_ids"])
+            predConf = protein.get(predKey + "_conf", {})
             for label in allLabels:
                 pred = 1 if label in protein[predKey] else 0
                 gold = 1 if label in protein["terms"] else 0
-                rows.append({"id":protId, "label_index":None, "label":label, "predicted":pred, "gold":gold, 
-                       "match":getMatch(gold, pred), "cafa_ids":cafa_ids})
+                conf = predConf.get(label, 1)
+                ensemble = ",".join(protein.get(predKey + "_sources", []))
+                rows.append({"id":protId, "label_index":None, "label":label, "predicted":pred, "gold":gold,
+                             "confidence":conf, "match":getMatch(gold, pred), "cafa_ids":cafa_ids, "ensemble":ensemble})
             dw.writerows(rows)
 
 def saveResults(data, outStem, label_names, negatives=False):

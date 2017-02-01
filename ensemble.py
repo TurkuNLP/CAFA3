@@ -32,9 +32,9 @@ def combineConf(protein, labels, predKeys, combKey):
     assert combConfKey not in protein
     protein[combConfKey] = {}
     combConfs = protein[combConfKey]
-    assert "ensemble" not in protein
-    protein["ensemble"] = {}
-    combSources = protein["ensemble"]
+    assert combKey + "_sources" not in protein
+    protein[combKey + "_sources"] = {}
+    combSources = protein[combKey + "_sources"]
     for key in predKeys:
         predConfs = protein.get(key + "_conf", {})
         for label in labels:
@@ -42,7 +42,8 @@ def combineConf(protein, labels, predKeys, combKey):
                 combConfs[label] = []
                 combSources[label] = []
             predConf = predConfs.get(label)
-            combConfs[label].append(predConf)
+            if predConf != None:
+                combConfs[label].append(predConf)
             combSources[label].append(key)
     protein[combConfKey] = {x:mean(combConfs[x]) for x in combConfs}
                         
@@ -247,8 +248,10 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                     results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
                     print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
                     if useOutFiles:
-                        pass#evaluation.saveResults(data, outStem, label_names, negatives)
-                    clearKeys(proteins, [combKey, combConfKey, "ensemble"])
+                        combString = "-".join(combination)
+                        outPath = os.path.join(outDir, "-".join([combString, setName, mode, "ensemble"]) + ".tsv.gz")
+                        evaluation.saveProteins(proteins, outPath, limitToSets=[setName], predKey=combKey) #pass#evaluation.saveResults(data, outStem, label_names, negatives)
+                    clearKeys(proteins, [combKey, combConfKey, combKey + "_sources"])
     if useLearning:
         print "===============", "Learning", "==============="
         Classifier = classification.importNamed(classifier)

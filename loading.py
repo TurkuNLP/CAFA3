@@ -16,8 +16,8 @@ def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None, us
     counts = defaultdict(int)
     baselineTerms = set()
     filenames = ["Jari_devel.tsv.gz", "Jari_test.tsv.gz"] #["Swissprot_sequence.go_count.tsv.gz"]
-    #if useCafa:
-    #    filenames.append("target_all.go_count.tsv.gz")
+    if useCafa:
+        filenames.append("Blast_CAFA3.tsv.gz") # "target_all.go_count.tsv.gz")
     for filename in filenames:
         filePath = os.path.join(baselinePath, filename)
         print "Reading", filePath

@@ -1,6 +1,6 @@
 # example input parameters:
 #
-#-i /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/nn_pred_cafa-cls_pred-baseline_pred-cafa-OR-ensemble.tsv.gz -o /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/ -m 1 -l /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/
+#-i /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/LASTKAI_cafa_targets.tsv.gz -o /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/ -m 2 -l /home/farmeh/Desktop/PROJECTS/GIT/CAFA3/data/testpred/ExampleSubmissionFolder/
 
 TARGET_ORGANISMS = ["moon"] + [str(i) for i in [10090 , 10116 , 160488 , 170187 , 208963 , 223283 , 224308 , 237561 , 243232 , 243273, 273057 ,284812, 321314, 3702 , 44689 , 559292 , 7227 , 7955 , 83333 , 8355 , 85962 , 9606 , 99287]] 
 PARAM_KEYWORDS   = "sequence alignment, sequence-profile alignment, profile-profile alignment, predicted properties, protein structure, machine learning, other functional information" + "." 
@@ -184,27 +184,29 @@ if __name__== "__main__":
                 continue 
         else: #info is in the DB, let's check if CAFA id in DB and file agree together... 
             DB_cafa_ids = set(i[0] for i in Info)
-
-            if len(Internal_cafa_ids - DB_cafa_ids)>0:
-                Errlog ("cafa_id in FILE, but not in DB :" + str(Internal_cafa_ids - DB_cafa_ids) + str(row))
-                continue 
             
+            for c_id in Internal_cafa_ids:
+                if not c_id in DB_cafa_ids:
+                    Errlog ("cafa_id in FILE, but not in DB :" + str(Internal_cafa_ids - DB_cafa_ids) + str(row))
+                    continue 
+            """
             if len(DB_cafa_ids - Internal_cafa_ids)>0:
                 Errlog ("cafa_id in DB, but not in FILE :" + str(Internal_cafa_ids - DB_cafa_ids) + str(row))
                 continue 
+            """
+                    
         
-        for record in Info:
-            CAFA_id , ncbitax_id = record[0] , record[1] 
-            if CAFA_id[0] == "M":
+        for cafa_id in Internal_cafa_ids:
+            if cafa_id.startswith("M"):
                 ORG_TYPE = "moon" 
             else:
-                ORG_TYPE = str(ncbitax_id) #change to STR ... by default it is Long int
+                ORG_TYPE = str(Info[0][1])# ncbitax_id) #change to STR ... by default it is Long int
 
             if not ORG_TYPE in ALL_FILES:
                 Errlog ("Prediction not among CAFA targets. Info: " + ORG_TYPE + "     " + str(row))
                 continue
                 
-            ALL_FILES[ORG_TYPE].write (CAFA_id + "\t" + PredicatedGoTerm + "\t" + '%.2f' % ConfidenceScore + "\n") 
+            ALL_FILES[ORG_TYPE].write (cafa_id + "\t" + PredicatedGoTerm + "\t" + '%.2f' % ConfidenceScore + "\n") 
             #print CAFA_id , ORG_TYPE , PredicatedGoTerm , ConfidenceScore 
     
     print "row processed:" , cnt      
@@ -224,7 +226,7 @@ if __name__== "__main__":
     # find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;
     shutil.os.chdir (OUTPUT_FOLDER) 
     shutil.os.system ("find . -type f -execdir zip '{}.zip' '{}' \; -exec rm '{}' \;") 
-   
+    
     print "COMPRESSING FILES FOR CAFA SUBMISSION ..." 
     ProteinCentricPredFiles = [] 
     TermCentricAndMoonlightPredFiles = []

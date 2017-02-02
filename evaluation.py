@@ -127,7 +127,7 @@ def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="
                 gold = 1 if label in goldLabels else 0
                 if gold == 1:
                     hasGold = True
-                conf = predConf.get(label, 0.75) if (pred == 1) else 0 # Use an average confidence for BLAST baseline transfer
+                conf = predConf.get(label, 0.01) if (pred == 1) else 0 # Use a low confidence for BLAST baseline transfer
                 match = getMatch(gold, pred)
                 sources = predSources.get(label, [])
                 for source in sources:

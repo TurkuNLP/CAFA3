@@ -260,13 +260,13 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                         combination[combination.index("nn_pred")] = "nn_pred_cafa"
                     print "***", "Evaluating", combination, "predictions for set '" + setName + "' using mode '" + mode + "'", "***"
                     combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
-                    if setName != "cafa":
-                        examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
-                        loading.vectorizeExamples(examples, None, sparseLabels=True)
-                        results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
-                        print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
-                    else:
-                        print "Skipping evaluation for set '" + setName + "'"
+                    #if setName != "cafa":
+                    examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
+                    loading.vectorizeExamples(examples, None, sparseLabels=True)
+                    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
+                    print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
+                    #else:
+                    #    print "Skipping evaluation for set '" + setName + "'"
                     if useOutFiles:
                         combString = "-".join(combination)
                         outPath = os.path.join(outDir, "-".join([combString, setName, mode, "ensemble"]) + ".tsv.gz")

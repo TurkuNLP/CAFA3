@@ -6,6 +6,7 @@ import gzip
 import csv
 
 def loadFolds(proteins, inPath, checkSplit=True):
+    counts = defaultdict(int)
     print "Loading folds from", inPath
 #     with open(inPath, "rt") as f:
 #         for line in f:
@@ -13,11 +14,16 @@ def loadFolds(proteins, inPath, checkSplit=True):
     with gzip.open(inPath, "rt") as f:
         reader = csv.DictReader(f, delimiter='\t')
         for row in reader:
-            protein = proteins[row["id"]]
-            assert "fold" not in protein
-            if checkSplit:
-                assert protein["split"] == row["split"]
-            protein["fold"] = int(row["fold"])
+            if row["id"] in proteins:
+                counts["row"] += 1
+                protein = proteins[row["id"]]
+                assert "fold" not in protein
+                if checkSplit:
+                    assert protein["split"] == row["split"]
+                protein["fold"] = int(row["fold"])
+            else:
+                counts["protein-not-found"] += 1
+    print "Loaded folds,", dict(counts)
 
 def saveFolds(proteins, outPath):
     print "Saving folds to", outPath

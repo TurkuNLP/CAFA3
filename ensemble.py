@@ -9,6 +9,7 @@ import shutil
 from utils import Stream
 from sklearn.grid_search import GridSearchCV
 import itertools
+from sklearn.preprocessing.data import minmax_scale, MinMaxScaler
 
 def clearKeys(proteins, keys):
     for protId in proteins:
@@ -174,10 +175,24 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     clf = GridSearchCV(Classifier(), classifierArgs, cv=develFolds, verbose=verbose, n_jobs=n_jobs, scoring="f1_micro")
     clf.fit(develExamples["features"], develExamples["classes"])
     print "Best params", (clf.best_params_, clf.best_score_)
+    print "Predicting all examples"
+    minMax = MinMaxScaler((0.03, 1.0))
+    allPredictions = clf.predict(examples["features"])
+    if hasattr(clf, "predict_proba"):
+        allProbabilities = clf.predict_proba(examples["features"])
+    else:
+        allProbabilities = clf.decision_function(examples["features"])
+        #import pdb; pdb.set_trace()
+        minMax.fit(allProbabilities) #minmax_scale(testProbabilities, (0.03, 1.0))
+        allProbabilities = minMax.transform(allProbabilities) #allProbabilities = minmax_scale(allProbabilities, (0.03, 1.0))
     print "Predicting the test set"
     testExamples = getSubset(examples, ["test"])
     testPredictions = clf.predict(testExamples["features"])
-    testProbabilities = clf.predict_proba(testExamples["features"])
+    if hasattr(clf, "predict_proba"):
+        testProbabilities = clf.predict_proba(testExamples["features"])
+    else:
+        testProbabilities = clf.decision_function(testExamples["features"])
+        testProbabilities = minMax.transform(testProbabilities)
     binaryToMultiLabel(testExamples, testPredictions, testProbabilities, predKey)
     print "Evaluating test set ensemble predictions"
     testProteins = {x["id"]:x for x in testExamples["proteins"]}
@@ -185,10 +200,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     loading.vectorizeExamples(multiLabelTestExamples, None, sparseLabels=True)
     results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True, noAUC=True)
     print "Average for test set:", evaluation.metricsToString(results["average"])
-    print "Predicting all examples"
-    allPredictions = clf.predict(examples["features"])
-    allProbabilities = clf.predict_proba(examples["features"])
-    binaryToMultiLabel(testExamples, allPredictions, allProbabilities, predKey)
+    binaryToMultiLabel(examples, allPredictions, allProbabilities, predKey)
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True):
     if outDir != None:

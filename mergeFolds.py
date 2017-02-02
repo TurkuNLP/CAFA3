@@ -42,13 +42,15 @@ def readLogs(inPath, foldPattern, numFolds, errors):
         argLine = logLines[i]["Best classifier arguments:"]
         if argLine != None:
             argString = argLine.split("\t")[-1].strip()
+            assert argString[0] == "B", argString
             if argString not in argFolds:
                 argFolds[argString] = []
             argFolds[argString].append(i)
-    argFolds = sorted([(len(argFolds[key]), argFolds[key], key) for key in argFolds])
+    argFolds = sorted([(len(argFolds[key]), argFolds[key], key) for key in argFolds], reverse=True)
     s += "Best arguments frequency\n"
     for argFold in argFolds:
         s += str(argFold) + "\n"
+    print "Most common arguments", argFolds[0]
     return s, argFolds[0][1]
 
 def checkHeaders(f, outFile):

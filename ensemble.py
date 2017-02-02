@@ -182,8 +182,8 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     print "Evaluating test set ensemble predictions"
     testProteins = {x["id"]:x for x in testExamples["proteins"]}
     multiLabelTestExamples = evaluateFile.makeExamples(testProteins, limitTerms=limitTerms, limitToSets=["test"], predKey=predKey)
-    loading.vectorizeExamples(multiLabelTestExamples, None)
-    results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True)
+    loading.vectorizeExamples(multiLabelTestExamples, None, sparseLabels=True)
+    results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True, noAUC=True)
     print "Average for test set:", evaluation.metricsToString(results["average"])
     print "Predicting all examples"
     allPredictions = clf.predict(examples["features"])
@@ -250,8 +250,8 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                     combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
                     if setName != "cafa":
                         examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
-                        loading.vectorizeExamples(examples, None)
-                        results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+                        loading.vectorizeExamples(examples, None, sparseLabels=True)
+                        results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
                         print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
                     else:
                         print "Skipping evaluation for set '" + setName + "'"

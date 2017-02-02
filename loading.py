@@ -11,13 +11,13 @@ def openAny(inPath, mode):
     return gzip.open(inPath, mode) if inPath.endswith(".gz") else open(inPath, mode)
 
 def loadBaseline(inPath, proteins, key="baseline", cutoff=1, limitTerms=None, useCafa=False):
-    baselinePath = os.path.join(inPath, "fallback")
+    baselinePath = os.path.join(inPath, "fallback", "trial")
     print "Loading BLAST baseline from", baselinePath
     counts = defaultdict(int)
     baselineTerms = set()
-    filenames = ["Swissprot_sequence.go_count.tsv.gz"]
-    if useCafa:
-        filenames.append("target_all.go_count.tsv.gz")
+    filenames = ["Jari_devel.tsv.gz", "Jari_test.tsv.gz"] #["Swissprot_sequence.go_count.tsv.gz"]
+    #if useCafa:
+    #    filenames.append("target_all.go_count.tsv.gz")
     for filename in filenames:
         filePath = os.path.join(baselinePath, filename)
         print "Reading", filePath

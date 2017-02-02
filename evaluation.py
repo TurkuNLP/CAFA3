@@ -4,15 +4,16 @@ import gzip
 from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_score
 from collections import defaultdict
 
-def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average="micro"):
+def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average="micro", noAUC=False):
     print "Evaluating the predictions"
     results = {}
     print "Calculating average scores"
     results["average"] = {"id":"average", "ns":None, "name":None, "auc":0, "tp":None, "fp":None, "fn":None, "tn":None}
-    try:
-        results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
-    except ValueError as e:
-        print e
+    if not noAUC:
+        try:
+            results["average"]["auc"] = roc_auc_score(labels, predicted, average="micro")
+        except ValueError as e:
+            print e
     results["average"]["fscore"] = f1_score(labels, predicted, average=average)
     results["average"]["precision"] = precision_score(labels, predicted, average=average)
     results["average"]["recall"] = recall_score(labels, predicted, average=average)

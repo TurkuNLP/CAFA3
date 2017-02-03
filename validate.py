@@ -7,10 +7,11 @@ def loadCAFA(cafaDir, modelNumber, baselineConf, counts):
     modelTag = "_" + str(modelNumber) + "_"
     proteins = {}
     for filename in os.listdir(cafaDir):
-        if modelTag in filename:
-            print "Reading", filename
+        filePath = os.path.join(cafaDir, filename)
+        if modelTag in filePath:
+            print "Reading", filePath
             counts["cafa-model-files"] += 1
-            with open(os.path.join(filename), "rt") as f:
+            with open(os.path.join(filePath), "rt") as f:
                 line = f.readline()
                 assert line.startswith("AUTHOR")
                 line = f.readline()
@@ -31,14 +32,26 @@ def loadCAFA(cafaDir, modelNumber, baselineConf, counts):
                         counts["cafa-baseline-terms"] += 1
                     else:
                         counts["cafa-non-baseline-terms"] += 1
+    return proteins
 
 def loadTSV(tsvPath, baselineConf, counts):
     proteins = {}
+    rowCount = 0
     with gzip.open(tsvPath, "rt") as f:
         for row in csv.DictReader(f, delimiter="\t"):
+            #print row, (baselineConf, baselineConf == row["confidence"])
+            rowCount += 1
+            if rowCount % 1000000 == 0:
+                print "Processing row", rowCount
             cafaIds = row["cafa_ids"].split(",")
+            if len(cafaIds) == 0:
+                counts["tsv-non-cafa-target-proteins"] += 1
+                continue
             cafaIds = [x for x in cafaIds if not x.startswith("M")]
-            assert len(cafaIds) == 1
+            if len(cafaIds) == 0:
+                counts["tsv-moonlight-only-predictions"] += 1
+                continue
+            assert len(cafaIds) == 1, cafaIds
             cafaId = cafaIds[0]
             if row["predicted"] == "1":
                 if cafaId not in proteins:
@@ -58,14 +71,15 @@ def validate(cafaDir, tsvPath, modelNumber, baselineConf):
     counts = defaultdict(int)
     print "Reading CAFA proteins"
     proteins1 = loadCAFA(cafaDir, modelNumber, baselineConf, counts)
-    print "Readgind TSV proteins"
+    print "Reading TSV proteins"
     proteins2 = loadTSV(tsvPath, baselineConf, counts)
     allProteinKeys = sorted(set(proteins1.keys() + proteins2.keys()))
-    numProteinKeys = allProteinKeys
+    numProteinKeys = len(allProteinKeys)
     protCount = 0
     for key in allProteinKeys:
         protCount += 1
-        print "Processing protein", key, "(" + str(protCount) + "/" + str(numProteinKeys) + ")"
+        if protCount % 10000 == 0:
+            print "Processing protein", key, "(" + str(protCount) + "/" + str(numProteinKeys) + ")"
         if key not in proteins1:
             counts["cafa-missing-protein"] += 1
         if key not in proteins2:
@@ -102,7 +116,7 @@ if __name__=="__main__":
     optparser.add_option("-a", "--cafaDir", default=None, help="")
     optparser.add_option("-b", "--tsvPath", default=None, help="")
     optparser.add_option("-m", "--model", default=None, type=int, help="")
-    optparser.add_option("-c", "--baselineConf", default="1.01", help="")
+    optparser.add_option("-c", "--baselineConf", default="0.01", help="")
     (options, args) = optparser.parse_args()
     
     validate(options.cafaDir, options.tsvPath, options.model, options.baselineConf)

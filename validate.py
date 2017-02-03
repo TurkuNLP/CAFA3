@@ -3,7 +3,7 @@ from collections import defaultdict
 import gzip
 import csv
 
-def loadCAFA(cafaDir, modelNumber, baselineConf, counts):
+def loadCAFA(cafaDir, modelNumber, baselineConf, termTag, counts):
     modelTag = "_" + str(modelNumber) + "_"
     proteins = {}
     for filename in os.listdir(cafaDir):
@@ -22,6 +22,10 @@ def loadCAFA(cafaDir, modelNumber, baselineConf, counts):
                     if line.startswith("END"):
                         continue
                     cafaId, termId, confidence = line.strip().split()
+                    rowTermTag = termId.split(":")[0]
+                    if rowTermTag != termTag:
+                        counts["skipped-term-tag-" + termTag] += 1
+                        continue
                     if cafaId not in proteins:
                         proteins[cafaId] = {}
                     if termId in proteins[cafaId]:
@@ -67,10 +71,10 @@ def loadTSV(tsvPath, baselineConf, counts):
                     counts["tsv-non-baseline-terms"] += 1
     return proteins
 
-def validate(cafaDir, tsvPath, modelNumber, baselineConf):
+def validate(cafaDir, tsvPath, modelNumber, baselineConf, termTag):
     counts = defaultdict(int)
     print "Reading CAFA proteins"
-    proteins1 = loadCAFA(cafaDir, modelNumber, baselineConf, counts)
+    proteins1 = loadCAFA(cafaDir, modelNumber, baselineConf, termTag, counts)
     print "Reading TSV proteins"
     proteins2 = loadTSV(tsvPath, baselineConf, counts)
     allProteinKeys = sorted(set(proteins1.keys() + proteins2.keys()))
@@ -89,11 +93,14 @@ def validate(cafaDir, tsvPath, modelNumber, baselineConf):
         for label in sorted(set(prot1.keys() + prot2.keys())):
             conf1 = prot1.get(label)
             conf2 = prot2.get(label)
-            if conf1 != None and conf1 == conf2:
-                if conf1 == baselineConf:
-                    counts["matching-baseline-terms"] += 1
+            if conf1 != None and conf1 != None:
+                if conf1 != conf2:
+                    counts["matching-terms-different-conf"] += 1
+                    #print key, label, (conf1, conf2)
+                elif conf1 == baselineConf:
+                    counts["matching-terms-baseline-conf"] += 1
                 else:
-                    counts["matching-non-baseline-terms"] += 1
+                    counts["matching-terms-non-baseline-conf"] += 1
             elif conf1 == None:
                 counts["cafa-missing-label"] += 1
                 if conf2 == baselineConf:
@@ -106,7 +113,9 @@ def validate(cafaDir, tsvPath, modelNumber, baselineConf):
                     counts["cafa-missing-baseline-terms"] += 1
                 else:
                     counts["cafa-missing-non-baseline-terms"] += 1
-    print "Statistics"
+    print "Statistics for model number", modelNumber
+    print "CAFA model directory:", cafaDir
+    print "TSV file:", tsvPath
     for key in sorted(counts.keys()):
         print key + ": " + str(counts[key])
 
@@ -117,6 +126,7 @@ if __name__=="__main__":
     optparser.add_option("-b", "--tsvPath", default=None, help="")
     optparser.add_option("-m", "--model", default=None, type=int, help="")
     optparser.add_option("-c", "--baselineConf", default="0.01", help="")
+    #optparser.add_option("-t", "--termTag", default="GO", help="")
     (options, args) = optparser.parse_args()
     
-    validate(options.cafaDir, options.tsvPath, options.model, options.baselineConf)
+    validate(options.cafaDir, options.tsvPath, options.model, options.baselineConf, options.termTag)

@@ -97,7 +97,8 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def evaluateFile(inPath, dataPath, setNames):
+def evaluateFile(inPath, dataPath, setNames, numTerms=5000, cafaTargets="skip"):
+    assert cafaTargets in ("skip", "overlap", "separate", "external")
     print "==========", "Evaluating", "=========="
     proteins = defaultdict(lambda: dict())
     print "Loading Swissprot proteins"
@@ -107,18 +108,18 @@ def evaluateFile(inPath, dataPath, setNames):
     print "Proteins:", len(proteins)
     termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)
-    topTerms = getTopTerms(termCounts, 5000)
+    topTerms = getTopTerms(termCounts, numTerms)
     print "Using", len(topTerms), "most common GO terms"
     loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
-    loading.defineSets(proteins, "skip")
+    loading.defineSets(proteins, cafaTargets)
     
     loadPredictions(proteins, inPath, setNames)
     examples = makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), predKey="predictions")
     #print "labels", examples["labels"][0:500]
     #print "predictions", examples["predictions"][0:500]
-    loading.vectorizeExamples(examples, None)
+    loading.vectorizeExamples(examples, None, sparseLabels=True)
     limitExamples(examples, setNames)
-    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True)
+    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
     print setNames, "average:", evaluation.metricsToString(results["average"])
 
 if __name__=="__main__":       
@@ -127,7 +128,9 @@ if __name__=="__main__":
     optparser.add_option("-i", "--input", default=None, help="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
     optparser.add_option("-s", "--setNames", default=None, help="")
+    optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels")
+    optparser.add_option("--targets", default="skip", help="How to include the CAFA target proteins, one of 'skip', 'overlap' or 'separate'")
     (options, args) = optparser.parse_args()
     
     options.setNames = [x.strip() for x in options.setNames.split(",")]
-    evaluateFile(options.input, options.dataPath, options.setNames)
+    evaluateFile(options.input, options.dataPath, options.setNames, options.terms, cafaTargets=options.targets)

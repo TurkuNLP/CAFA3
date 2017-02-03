@@ -57,7 +57,7 @@ def loadTSV(tsvPath, baselineConf, counts):
                 if cafaId not in proteins:
                     proteins[cafaId] = {}
                 termId = row["label"]
-                confidence = row["confidence"]
+                confidence = '%.2f' % float(row["confidence"])
                 if termId in proteins[cafaId]:
                     counts["tsv_duplicate_terms"] += 1
                 proteins[cafaId][termId] = confidence

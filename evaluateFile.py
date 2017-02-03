@@ -44,7 +44,7 @@ def makeExamples(proteins, limitTerms, limitToSets=None, predKey="predictions"):
 
 def limitExamples(examples, limitToSets):
     indices = [i for i in range(len(examples["sets"])) if any(x in limitToSets for x in examples["sets"][i])]
-    print "Limiting", len(examples["labels"]), "to", len(indices)
+    print "Limiting", examples["labels"].shape[0], "to", len(indices)
     for key in ("ids", "cafa_ids", "sets"):
         examples[key] = [examples[key][i] for i in indices]
     for key in ("labels", "predictions"):
@@ -103,8 +103,9 @@ def evaluateFile(inPath, dataPath, setNames, numTerms=5000, cafaTargets="skip"):
     proteins = defaultdict(lambda: dict())
     print "Loading Swissprot proteins"
     loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
-    #print "Loading CAFA3 targets"
-    #loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+    if cafaTargets != "skip":
+        print "Loading CAFA3 targets"
+        loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
     termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)

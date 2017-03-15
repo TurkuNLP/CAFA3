@@ -26,7 +26,7 @@ def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average
     label_args = examples.get("label_args")
     try:
         aucs = roc_auc_score(labels, predicted, average=None)
-    except ValueError as e:
+    except (TypeError, ValueError) as e:
         print e
         aucs = [0] * len(label_names)
     fscores = f1_score(labels, predicted, average=None)
@@ -86,6 +86,22 @@ def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
         count += 1
         if count > maxNumber:
             break
+    return s
+
+def getResultsTable(results, maxNumber=None, skipIds=None, sortBy="fscore"):
+    count = 0
+    s = ""
+    for result in sorted(results.values(), key=lambda x: x[sortBy], reverse=True):
+        if skipIds != None and result["id"] in skipIds:
+            continue
+        values = ["%.3f" % result[x] for x in ("fscore", "precision", "recall")]
+        values += [str(result.get(x, "-")) for x in ("tp", "fp", "tn", "fn")]
+        values += [result.get("id"), result.get("ns"), str(result.get("label_size")), result.get("name")]
+        s += " & ".join([str(x) for x in values]) + "\\\\\n"
+        count += 1
+        if count > maxNumber:
+            break
+    s = s.replace("_", "\_")
     return s
 
 def saveProteins(proteins, outPath, limitTerms=None, limitToSets=None, predKey="predictions"):

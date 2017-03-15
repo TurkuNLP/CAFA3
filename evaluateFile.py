@@ -97,9 +97,15 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def evaluateFile(inPath, dataPath, setNames, numTerms=5000, cafaTargets="skip"):
+def evaluateFile(inPath, dataPath, setNames, numTerms=5000, cafaTargets="skip", useHPO=False, detailed=False):
     assert cafaTargets in ("skip", "overlap", "separate", "external")
     print "==========", "Evaluating", "=========="
+    terms = None
+    if detailed:
+        if useHPO:
+            terms = loading.loadOBOTerms(os.path.join(options.dataPath, "HPO", "ontology", "hp.obo"), onlyNames=True, forceNameSpace="obo")
+        else:
+            terms = loading.loadGOTerms(os.path.join(options.dataPath, "GO", "go_terms.tsv"))
     proteins = defaultdict(lambda: dict())
     print "Loading Swissprot proteins"
     loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
@@ -107,21 +113,30 @@ def evaluateFile(inPath, dataPath, setNames, numTerms=5000, cafaTargets="skip"):
         print "Loading CAFA3 targets"
         loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
-    termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
+    if useHPO:
+        loading.removeNonHuman(proteins)
+        termCounts = loading.loadHPOAnnotations(os.path.join(options.dataPath, "HPO", "annotation", "all_cafa_annotation_propagated.tsv.gz"), proteins)
+    else:
+        termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)
     topTerms = getTopTerms(termCounts, numTerms)
     print "Using", len(topTerms), "most common GO terms"
-    loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+    loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=useHPO)
     loading.defineSets(proteins, cafaTargets)
     
     loadPredictions(proteins, inPath, setNames)
     examples = makeExamples(proteins, limitTerms=set([x[0] for x in topTerms]), predKey="predictions")
     #print "labels", examples["labels"][0:500]
     #print "predictions", examples["predictions"][0:500]
-    loading.vectorizeExamples(examples, None, sparseLabels=True)
+    loading.vectorizeExamples(examples, None, sparseLabels=not detailed)
     limitExamples(examples, setNames)
-    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
+    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=terms, averageOnly=not detailed, noAUC=True)
     print setNames, "average:", evaluation.metricsToString(results["average"])
+    if detailed:
+        print "------", "Detailed results", "------"
+        print evaluation.getResultsString(results, 20, ["average"])
+        print "------", "Detailed results table", "------"
+        print evaluation.getResultsTable(results, 20, ["average"])
 
 if __name__=="__main__":       
     from optparse import OptionParser
@@ -131,7 +146,9 @@ if __name__=="__main__":
     optparser.add_option("-s", "--setNames", default=None, help="")
     optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels")
     optparser.add_option("--targets", default="skip", help="How to include the CAFA target proteins, one of 'skip', 'overlap' or 'separate'")
+    optparser.add_option("--hpo", default=False, action="store_true")
+    optparser.add_option("--detailed", default=False, action="store_true")
     (options, args) = optparser.parse_args()
     
     options.setNames = [x.strip() for x in options.setNames.split(",")]
-    evaluateFile(options.input, options.dataPath, options.setNames, options.terms, cafaTargets=options.targets)
+    evaluateFile(options.input, options.dataPath, options.setNames, options.terms, cafaTargets=options.targets, useHPO=options.hpo, detailed=options.detailed)

@@ -2,21 +2,21 @@ import sys, os
 import gzip
 from collections import defaultdict
 import csv
-from featureBuilders import *
+from learning.featureBuilders import *
 from utils import Stream
 import operator
 import time
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics.ranking import roc_auc_score
 import shutil
-import makeFolds
+import learning.makeFolds as makeFolds
 try:
     import ujson as json
 except ImportError:
     import json
-import statistics
-from classification import Classification, SingleLabelClassification
-import loading
+import utils.statistics as statistics
+from learning.classification import Classification, SingleLabelClassification
+import learning.loading as loading
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed

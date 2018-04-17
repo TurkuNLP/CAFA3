@@ -168,10 +168,16 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
         proteins = {} #defaultdict(lambda: dict())
-        loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+        if task == "cafapi":
+            loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
+        else:
+            loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
-            print "Loading CAFA3 targets"
-            loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+            if task == "cafapi":
+                loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "target.all.fasta"), proteins, True)
+            else:
+                print "Loading CAFA3 targets"
+                loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
         if task == "cafa3hpo":
             loading.removeNonHuman(proteins)
@@ -179,14 +185,17 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         elif task == "cafa3":
             termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
         else:
-            termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
+            termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_propagated.tsv.gz"), proteins)
         
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
         print "Using", len(topTerms), "most common GO terms"
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
-        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
+        if task == "cafapi":
+            loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins, allowMissing=task != "cafa3")
+        else:
+            loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
         if fold != None:
             makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz"))
         loading.defineSets(proteins, cafaTargets, fold=fold)

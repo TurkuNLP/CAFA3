@@ -8,7 +8,7 @@ import os
 ###############################################################################
 
 class FeatureBuilder:
-    def __init__(self):
+    def __init__(self, debug=False):
         pass
     
     def build(self, proteins):
@@ -44,12 +44,13 @@ class FeatureBuilder:
         self.coveredIds = None 
 
 class MultiFileFeatureBuilder(FeatureBuilder):
-    def __init__(self, inPaths, filePatterns, tag, message):
-        FeatureBuilder.__init__(self)
+    def __init__(self, inPaths, filePatterns, tag, message, debug=False):
+        FeatureBuilder.__init__(self, debug=debug)
         self.tag = tag
         self.inPaths = inPaths
         self.filePatterns = filePatterns
         self.message = message
+        self.debug = debug
     
     def build(self, proteins):
         print self.message
@@ -59,7 +60,13 @@ class MultiFileFeatureBuilder(FeatureBuilder):
         self.beginCoverage(protById.keys())
         for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
             print "Reading", filePath
-            self.buildForFile(filePath, protById)
+            try:
+                self.buildForFile(filePath, protById)
+            except IOError as e:
+                print e
+                print "Error reading file", filePath
+                if not self.debug:
+                    raise e
         self.finishCoverage()
     
     def buildForFile(self, filePath, protById):
@@ -86,8 +93,8 @@ class KeyValueFeatureBuilder(MultiFileFeatureBuilder):
         protein["features"][self.tag + ":value"] = float(value)
 
 class CSVFeatureBuilder(MultiFileFeatureBuilder):
-    def __init__(self, inPaths, filePatterns, tag, message, protColumn, columns=None, delimiter='\t'):
-        MultiFileFeatureBuilder.__init__(self, inPaths, filePatterns, tag, message)
+    def __init__(self, inPaths, filePatterns, tag, message, protColumn, columns=None, delimiter='\t', debug=False):
+        MultiFileFeatureBuilder.__init__(self, inPaths, filePatterns, tag, message, debug=debug)
         self.columns = columns
         self.protColumn = protColumn
         self.delimiter = delimiter
@@ -118,10 +125,10 @@ class CSVFeatureBuilder(MultiFileFeatureBuilder):
 ###############################################################################
 
 class BlastFeatureBuilder(CSVFeatureBuilder):
-    def __init__(self, inPaths, tag="BLAST"): 
+    def __init__(self, inPaths, tag="BLAST", debug=False): 
         filePatterns = (re.compile("target.[0-9]+.features_tsv\.gz"), re.compile("Swissprot\_sequence\_[0-9]\.features\_tsv\.gz"), re.compile("sequence\_[0-9]+\.fasta\.features\_tsv\.gz"))
         columns = ["Uniprot_ID query","Unknown_A","Unknown_B","Unknown_C","Matched Uniprot_ID","Matched Uniprot_ACC","Hsp_hit-len","Hsp_align-len","Hsp_bit-score","Hsp_score","Hsp_evalue","hsp.query_start","hsp.query_end","Hsp_hit-from","Hsp_hit-to","Hsp_query-frame","Hsp_hit-frame","Hsp_identity","Hsp_positives","Hsp_gaps"]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLAST features", "Uniprot_ID query", columns)
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, tag, "Building BLAST features", "Uniprot_ID query", columns, debug=debug)
     
     def setRow(self, features, row, filePath):
         features[self.tag + ":Hsp_score:" + row["Matched Uniprot_ID"]] = float(row["Hsp_score"])

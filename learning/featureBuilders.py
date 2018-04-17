@@ -9,7 +9,7 @@ import os
 
 class FeatureBuilder:
     def __init__(self, debug=False):
-        pass
+        self.debug = debug
     
     def build(self, proteins):
         pass
@@ -50,7 +50,6 @@ class MultiFileFeatureBuilder(FeatureBuilder):
         self.inPaths = inPaths
         self.filePatterns = filePatterns
         self.message = message
-        self.debug = debug
     
     def build(self, proteins):
         print self.message
@@ -113,7 +112,13 @@ class CSVFeatureBuilder(MultiFileFeatureBuilder):
                     if found:
                         self.addToCoverage(currentId)
                 if found:
-                    self.setRow(features, row, filePath)
+                    try:
+                        self.setRow(features, row, filePath)
+                    except ValueError as e:
+                        print e
+                        print "Error reading row from file", filePath
+                        if not self.debug:
+                            raise e
     
     def setRow(self, features, row, filePath):
         for key in row:
@@ -149,9 +154,9 @@ class NucPredFeatureBuilder(CSVFeatureBuilder):
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "NUC", "Building nucPred features", "Sequence-ID")
 
 class PredGPIFeatureBuilder(CSVFeatureBuilder):
-    def __init__(self, inPaths):
+    def __init__(self, inPaths, debug=False):
         filePatterns = [re.compile("new\_CAFA3\_predGPI\.tsv\.gz"), re.compile("new\_training\_predGPI\.tsv\.gz")]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "GPI", "Building predGPI features", "protein_id")
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "GPI", "Building predGPI features", "protein_id", debug=debug)
 
 class NetAcetFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):

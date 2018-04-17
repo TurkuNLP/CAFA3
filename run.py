@@ -116,7 +116,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
         builder.build(protObjs)
     if featureGroups == None or "predgpi" in featureGroups:
-        builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")])
+        builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")], debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "nucpred" in featureGroups:
         builder = NucPredFeatureBuilder([os.path.join(dataPath, "nucPred")])
@@ -198,7 +198,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
         if fold != None:
             makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz" if task != "cafapi" else "CAFA_PI_training_folds_180417.tsv.gz"))
-        loading.defineSets(proteins, cafaTargets, fold=fold)
+        loading.defineSets(proteins, cafaTargets, fold=fold, limitTrainingToAnnotated = task != "cafapi")
         #divided = splitProteins(proteins)
         featuresDataPath = dataPath
         if task == "cafapi":

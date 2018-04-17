@@ -55,17 +55,24 @@ def makeFolds(proteins, numFolds=10, seed=1):
     print "Folds:", dict(counts)
     print "Total:", sum(counts.values())
 
-def run(dataPath, outPath=None):
+def run(dataPath, outPath=None, task="cafa3"):
     print "==========", "Generating Folds", "=========="
     proteins = defaultdict(lambda: dict())
     print "Loading Swissprot proteins"
-    loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+    assert task in ("cafa3", "cafapi")
+    if task == "cafa3":
+        loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+    else:
+        loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
     #print "Loading CAFA3 targets"
     #loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     #print "Proteins:", len(proteins)
     #termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
     #print "Unique terms:", len(termCounts)
-    loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
+    if task == "cafapi":
+        loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins)
+    else:
+        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins)
     makeFolds(proteins)
     saveFolds(proteins, outPath)
 
@@ -74,6 +81,7 @@ if __name__=="__main__":
     optparser = OptionParser(description="")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="")
     optparser.add_option("-o", "--output", default=None, help="")
+    optparser.add_option("--task", default="cafa3")
     (options, args) = optparser.parse_args()
     
-    run(options.dataPath, options.output)
+    run(options.dataPath, options.output, options.task)

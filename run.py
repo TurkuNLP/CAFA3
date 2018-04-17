@@ -197,7 +197,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         else:
             loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
         if fold != None:
-            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz"))
+            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz" if task != "cafapi" else "CAFA_PI_training_folds_180417.tsv.gz"))
         loading.defineSets(proteins, cafaTargets, fold=fold)
         #divided = splitProteins(proteins)
         examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)

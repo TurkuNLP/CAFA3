@@ -202,7 +202,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     print "Average for test set:", evaluation.metricsToString(results["average"])
     binaryToMultiLabel(examples, allPredictions, allProbabilities, predKey)
     
-def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True):
+def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True, task="cafa3"):
     if outDir != None:
         if clear and os.path.exists(outDir):
             print "Removing output directory", outDir
@@ -215,12 +215,24 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     print "==========", "Ensemble", "=========="
     proteins = {}
     print "Loading Swissprot proteins"
-    loading.loadFASTA(os.path.join(dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+    if task == "cafapi":
+        loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
+    else:
+        loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
     if useCafa:
-        print "Loading CAFA3 targets"
-        loading.loadFASTA(os.path.join(dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+        print "Loading CAFA targets"
+        if task == "cafapi":
+            loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "target.all.fasta.gz"), proteins, True)
+        else:
+            loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
     print "Proteins:", len(proteins)
-    termCounts = loading.loadAnnotations(os.path.join(dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
+    if task == "cafa3hpo":
+        loading.removeNonHuman(proteins)
+        termCounts = loading.loadHPOAnnotations(os.path.join(options.dataPath, "HPO", "annotation", "all_cafa_annotation_propagated.tsv.gz"), proteins)
+    elif task == "cafa3":
+        termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
+    else:
+        termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_propagated.tsv.gz"), proteins)
     print "Unique terms:", len(termCounts)
     topTerms = loading.getTopTerms(termCounts, numTerms)
     limitTerms=set([x[0] for x in topTerms])

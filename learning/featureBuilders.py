@@ -31,17 +31,30 @@ class FeatureBuilder:
                         break
         return matching
     
-    def beginCoverage(self, protIds):
-        self.numProteins = len(set(protIds))
-        self.coveredIds = set()
+    def beginCoverage(self, proteins):
+        self.numProteins = {"total":len(proteins)}
+        for protein in proteins:
+            protSets = ",".join(protein["sets"])
+            if protSets not in self.numProteins:
+                self.numProteins[protSets] = 0
+            self.numProteins[protSets] += 1
+        self.coverage = {"total":set()}
     
-    def addToCoverage(self, protId):
-        self.coveredIds.add(protId)
+    def addToCoverage(self, protein):
+        protId = protein["id"]
+        self.coverage["total"].add(protId)
+        protSets = ",".join(protein["sets"])
+        if protSets not in self.coverage:
+            self.coverage[protSets] = set()
+        self.coverage[protSets].add(protId)
+        #self.coveredIds.add(protId)
     
     def finishCoverage(self):
-        print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins, [len(self.coveredIds), self.numProteins]
+        #print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins, "included/total =" [len(self.coveredIds), self.numProteins]
+        counts = {x:len(self.coverage[x]) for x in self.coverage}
+        print self.__class__.__name__, "coverage =", {x:float(counts[x]) / self.numProteins[x] for x in counts}, "included/total =", [counts, self.numProteins]
         self.numProteins = None
-        self.coveredIds = None 
+        self.coverage = None 
 
 class MultiFileFeatureBuilder(FeatureBuilder):
     def __init__(self, inPaths, filePatterns, tag, message, debug=False):
@@ -56,7 +69,8 @@ class MultiFileFeatureBuilder(FeatureBuilder):
         protById = {}
         for protein in proteins:
             protById[protein["id"]] = protein
-        self.beginCoverage(protById.keys())
+        assert len(protById) == len(proteins)
+        self.beginCoverage(proteins)
         for filePath in self.getMatchingPaths(self.inPaths, self.filePatterns):
             print "Reading", filePath
             try:
@@ -85,7 +99,7 @@ class KeyValueFeatureBuilder(MultiFileFeatureBuilder):
                 key, value = line.strip().split("\t")
                 protein = protById.get(key)
                 if protein is not None:
-                    self.addToCoverage(protein["id"])
+                    self.addToCoverage(protein)
                     self.setValue(protein, value)
     
     def setValue(self, protein, value):
@@ -110,7 +124,7 @@ class CSVFeatureBuilder(MultiFileFeatureBuilder):
                     found = currentId in protById
                     features = protById[currentId]["features"] if found else None
                     if found:
-                        self.addToCoverage(currentId)
+                        self.addToCoverage(protById[currentId])
                 if found:
                     try:
                         self.setRow(features, row, filePath)
@@ -216,7 +230,7 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
                     if ncbitax_id in self.mapping:
                         for protId in self.mapping[ncbitax_id]:
                             if protId in protById:
-                                self.addToCoverage(protId)
+                                self.addToCoverage(protById[protId])
                                 currentProteins.append(protById[protId])
                     if len(currentProteins) == 0:
                         currentProteins = None
@@ -258,7 +272,7 @@ class UniprotFeatureBuilder(FeatureBuilder):
         for protein in proteins:
             protId = protein["id"]
             if protId in self.data:
-                self.addToCoverage(protId)
+                self.addToCoverage(protein)
                 for section in ("sub", "fam"):
                     for feature in self.data[protId][section]:
                         self.setFeature(protein, "SIM:" + section + ":" + feature, 1)

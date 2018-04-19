@@ -52,7 +52,7 @@ class FeatureBuilder:
     def finishCoverage(self):
         #print self.__class__.__name__, "coverage =", float(len(self.coveredIds)) / self.numProteins, "included/total =" [len(self.coveredIds), self.numProteins]
         counts = {x:len(self.coverage[x]) for x in self.coverage}
-        print self.__class__.__name__, "coverage =", {x:float(counts[x]) / self.numProteins[x] for x in sorted(counts.keys())}, "(included, total) =", {x:(counts[x], self.numProteins[x]) for x in sorted(self.numProteins.keys())}
+        print self.__class__.__name__, "coverage (included, all, fraction) =", {x:(counts[x], self.numProteins[x], float(counts[x]) / self.numProteins[x]) for x in sorted(self.numProteins.keys())}
         self.numProteins = None
         self.coverage = None 
 

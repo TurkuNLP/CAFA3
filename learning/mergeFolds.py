@@ -87,7 +87,7 @@ def collect(inPath, numFolds, foldPattern, errors):
                     for line in f:
                         outFiles[setName].write(line)
             else:
-                onError("Result file '" + predPath + "' not found")
+                onError("Result file '" + predPath + "' not found", errors)
         if i in mostCommonArgsFolds:
             foldCAFAPath = os.path.join(foldDir, "cafa-predictions.tsv.gz")
             if os.path.exists(foldCAFAPath):

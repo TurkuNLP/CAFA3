@@ -172,9 +172,9 @@ class NGramFeatureBuilder(CSVFeatureBuilder):
         features[self.tag + ":NGRAM_ID=" + row["NGRAM_ID"]] = 1
     
 class InterProScanFeatureBuilder(CSVFeatureBuilder):
-    def __init__(self, inPaths):
+    def __init__(self, inPaths, debug=False):
         filePatterns = [re.compile(".+_noGO.tsv.gz"), re.compile(".+_GO.tsv.gz")]
-        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterProScan features", "protein_id")
+        CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "IPS", "Building InterProScan features", "protein_id", debug=debug)
     
     def setRow(self, features, row, filePath):
         # Choose the primary identifier for the feature

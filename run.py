@@ -17,6 +17,7 @@ except ImportError:
 import utils.statistics as statistics
 from learning.classification import Classification, SingleLabelClassification
 import learning.loading as loading
+from collections import Counter
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed
@@ -113,7 +114,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA", debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "interpro" in featureGroups:
-        builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
+        builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")], debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "predgpi" in featureGroups:
         builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")], debug=debug)
@@ -174,7 +175,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
             if task == "cafapi":
-                loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "target.all.fasta"), proteins, True)
+                loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "target.all.fasta.gz"), proteins, True)
             else:
                 print "Loading CAFA3 targets"
                 loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
@@ -193,7 +194,11 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
         if task == "cafapi":
-            loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins, allowMissing=task != "cafa3")
+            loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins)
+            for protId in proteins.keys():
+                if proteins[protId].get("split") == "test":
+                    proteins[protId]["split"] = "devel"
+            print "Remapped splits", Counter([x.get("split") for x in proteins.values()])
         else:
             loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
         if fold != None:

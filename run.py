@@ -66,7 +66,7 @@ def getFeatureGroups(groups=None):
         groups.remove(group.strip("-"))
     return groups
 
-def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None):
+def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups=None, debug=False):
     print "Building examples"
     examples = {"labels":[], "features":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
     protIds = sorted(proteins.keys())
@@ -104,19 +104,19 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
         builder = UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt"))
         builder.build(protObjs)
     if featureGroups == None or "blast" in featureGroups:
-        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")])
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_blastp_result_features"), os.path.join(dataPath, "blastp_result_features")], debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "blast62" in featureGroups:
-        builder = BlastFeatureBuilder([os.path.join(dataPath, "CAFA2", "training_features"), os.path.join(dataPath, "CAFA2", "CAFA3_features")], tag="BLAST62")
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "CAFA2", "training_features"), os.path.join(dataPath, "CAFA2", "CAFA3_features")], tag="BLAST62", debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "delta" in featureGroups:
-        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA")
+        builder = BlastFeatureBuilder([os.path.join(dataPath, "temp_deltablast_result_features"), os.path.join(dataPath, "deltablast_result_features")], tag="DELTA", debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "interpro" in featureGroups:
         builder = InterProScanFeatureBuilder([os.path.join(dataPath, "temp_interproscan_result_features"), os.path.join(dataPath, "interproscan_result_features")])
         builder.build(protObjs)
     if featureGroups == None or "predgpi" in featureGroups:
-        builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")])
+        builder = PredGPIFeatureBuilder([os.path.join(dataPath, "predGPI")], debug=debug)
         builder.build(protObjs)
     if featureGroups == None or "nucpred" in featureGroups:
         builder = NucPredFeatureBuilder([os.path.join(dataPath, "nucPred")])
@@ -144,7 +144,7 @@ def getTopTerms(counts, num=1000):
 
 def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
         limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
-        negatives=False, singleLabelJobs=None, task="cafa3"):
+        negatives=False, singleLabelJobs=None, task="cafa3", debug=False):
     assert task in ("cafa3", "cafa3hpo", "cafapi")
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
@@ -168,10 +168,16 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     if actions == None or "build" in actions:
         print "==========", "Building Examples", "=========="
         proteins = {} #defaultdict(lambda: dict())
-        loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
+        if task == "cafapi":
+            loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
+        else:
+            loading.loadFASTA(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"), proteins)
         if cafaTargets != "skip":
-            print "Loading CAFA3 targets"
-            loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
+            if task == "cafapi":
+                loading.loadFASTA(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "target.all.fasta"), proteins, True)
+            else:
+                print "Loading CAFA3 targets"
+                loading.loadFASTA(os.path.join(options.dataPath, "CAFA3_targets", "Target_files", "target.all.fasta"), proteins, True)
         print "Proteins:", len(proteins)
         if task == "cafa3hpo":
             loading.removeNonHuman(proteins)
@@ -179,19 +185,26 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         elif task == "cafa3":
             termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "data", "Swissprot_propagated.tsv.gz"), proteins)
         else:
-            termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"), proteins)
+            termCounts = loading.loadAnnotations(os.path.join(options.dataPath, "CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_propagated.tsv.gz"), proteins)
         
         print "Unique terms:", len(termCounts)
         topTerms = getTopTerms(termCounts, numTerms)
         print "Using", len(topTerms), "most common GO terms"
         #print "Most common terms:", topTerms
         #print proteins["14310_ARATH"]
-        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
+        if task == "cafapi":
+            loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins, allowMissing=task != "cafa3")
+        else:
+            loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
         if fold != None:
-            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz"))
-        loading.defineSets(proteins, cafaTargets, fold=fold)
+            makeFolds.loadFolds(proteins, os.path.join(options.dataPath, "folds", "training_folds_170125.tsv.gz" if task != "cafapi" else "CAFA_PI_training_folds_180417.tsv.gz"))
+        loading.defineSets(proteins, cafaTargets, fold=fold, limitTrainingToAnnotated = task != "cafapi")
         #divided = splitProteins(proteins)
-        examples = buildExamples(proteins, dataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups)
+        featuresDataPath = dataPath
+        if task == "cafapi":
+            featuresDataPath = os.path.join(dataPath, "CAFA_PI", "features")
+        print "Loading features from", featuresDataPath
+        examples = buildExamples(proteins, featuresDataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups, debug=debug)
         print "Saving examples to", exampleFilePath
         with gzip.open(exampleFilePath, "wt") as pickleFile:
             json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
@@ -243,6 +256,7 @@ if __name__=="__main__":
     optparser.add_option("--negatives", default=False, action="store_true", help="Write negative predictions in the result files")
     optparser.add_option("--fold", default=None, type=int)
     optparser.add_option("--task", default="cafa3")
+    optparser.add_option("--debug", default=False, action="store_true")
     (options, args) = optparser.parse_args()
     
     if options.actions != None:
@@ -256,4 +270,4 @@ if __name__=="__main__":
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
         cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 
-        singleLabelJobs=options.singleLabelJobs, task=options.task)
+        singleLabelJobs=options.singleLabelJobs, task=options.task, debug=options.debug)

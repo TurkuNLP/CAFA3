@@ -56,13 +56,16 @@ def loadAnnotations(inPath, proteins):
     counts = defaultdict(int)
     with gzip.open(inPath, "rt") as f:
         tsv = csv.reader(f, delimiter='\t')
+        rowCount = 0
         for row in tsv:
+            assert len(row) == 3, (row, rowCount)
             protId, goTerm, evCode = row
             protein = proteins[protId]
             if "terms" not in protein:
                 protein["terms"] = {}
             protein["terms"][goTerm] = evCode
             counts[goTerm] += 1
+            rowCount += 1
     return counts
 
 def removeNonHuman(proteins):

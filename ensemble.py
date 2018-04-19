@@ -1,15 +1,16 @@
 from sklearn.feature_extraction import DictVectorizer
 from collections import defaultdict
-import evaluateFile
-import loading
-import evaluation
+import learning.evaluateFile as evaluateFile
+import learning.loading as loading
+import learning.evaluation as evaluation
 import sys, os
-import classification
+import learning.classification as classification
 import shutil
 from utils import Stream
 from sklearn.grid_search import GridSearchCV
 import itertools
 from sklearn.preprocessing.data import minmax_scale, MinMaxScaler
+from collections import Counter
 
 def clearKeys(proteins, keys):
     for protId in proteins:
@@ -201,6 +202,18 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     results = evaluation.evaluate(multiLabelTestExamples["labels"], multiLabelTestExamples["predictions"], multiLabelTestExamples, terms=None, averageOnly=True, noAUC=True)
     print "Average for test set:", evaluation.metricsToString(results["average"])
     binaryToMultiLabel(examples, allPredictions, allProbabilities, predKey)
+
+def loadPredictionFiles(proteins, predPath, predKey, useCafa, task, predTag):
+    inPaths = []
+    if os.path.isfile(predPath):
+        inPaths = [predPath]
+    else:
+        for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+            if setName == "test" and task == "cafapi":
+                continue
+            inPaths.append(os.path.join(predPath, setName + predTag[setName] + ".tsv.gz"))
+    for inPath in inPaths:
+        evaluateFile.loadPredictions(proteins, inPath, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=False, predKey=predKey, confKey=predKey + "_conf")
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True, task="cafa3"):
     if outDir != None:
@@ -237,19 +250,30 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     topTerms = loading.getTopTerms(termCounts, numTerms)
     limitTerms=set([x[0] for x in topTerms])
     print "Using", len(topTerms), "most common GO terms"
-    loading.loadSplit(os.path.join(dataPath, "data"), proteins)
-    loading.defineSets(proteins, "overlap" if useCafa else "skip")
+    if task == "cafapi":
+        loading.loadSplit(os.path.join(options.dataPath, "CAFA_PI", "Swissprot"), proteins)
+        for protId in proteins.keys():
+            if proteins[protId].get("split") == "test":
+                proteins[protId]["split"] = "devel"
+        print "Remapped splits", Counter([x.get("split") for x in proteins.values()])
+    else:
+        loading.loadSplit(os.path.join(options.dataPath, "data"), proteins, allowMissing=task != "cafa3")
+    loading.defineSets(proteins, "overlap" if useCafa else "skip", limitTrainingToAnnotated = task != "cafapi")
     
     predKeys = []
     if nnInput != None:
         print "Loading neural network predictions from", nnInput
-        for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
-            predKey = "nn_pred_cafa" if setName == "cafa" else "nn_pred"
-            evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey=predKey, confKey="nn_pred_conf", includeDuplicates=True)
+        loadPredictionFiles(proteins, nnInput, "nn_pred", useCafa, task, {"cafa":"_targets", "devel":"_pred", "test":"_pred"})
+#         for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+#             if setName == "test" and task == "cafapi":
+#                 continue
+#             predKey = "nn_pred_cafa" if setName == "cafa" else "nn_pred"
+#             evaluateFile.loadPredictions(proteins, os.path.join(nnInput, setName + ("_targets" if setName == "cafa" else "_pred")) + ".tsv.gz", limitToSets=None, readGold=False, predKey=predKey, confKey="nn_pred_conf", includeDuplicates=True)
         predKeys += ["nn_pred"]
     if clsInput != None:
         print "Loading classifier predictions"
-        evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
+        loadPredictionFiles(proteins, clsInput, "cls_pred", useCafa, task, {"cafa":"-predictions", "devel":"-predictions", "test":"-predictions"})
+#        evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
         predKeys += ["cls_pred"]
     if baselineCutoff > 0:
         print "Loading baseline predictions"
@@ -267,16 +291,22 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
             print "******", "Combination", str(i + 1) + "/" + str(numCombinations), combinations[i], "******"
             for mode in (("AND", "OR") if len(combinations[i]) > 1 else ("SINGLE",)):
                 for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
+                    if setName == "test" and task == "cafapi":
+                        continue
                     combination = combinations[i][:]
-                    if setName == "cafa" and "nn_pred" in combination:
+                    if task != "cafapi" and setName == "cafa" and "nn_pred" in combination:
                         combination[combination.index("nn_pred")] = "nn_pred_cafa"
+                    print
                     print "***", "Evaluating", combination, "predictions for set '" + setName + "' using mode '" + mode + "'", "***"
                     combinePred(proteins, combination, combKey, mode, limitToSets=[setName])
                     #if setName != "cafa":
                     examples = evaluateFile.makeExamples(proteins, limitTerms=limitTerms, limitToSets=[setName], predKey=combKey)
                     loading.vectorizeExamples(examples, None, sparseLabels=True)
-                    results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
-                    print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
+                    try:
+                        results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
+                        print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
+                    except TypeError as e:
+                        print e
                     #else:
                     #    print "Skipping evaluation for set '" + setName + "'"
                     if useOutFiles:
@@ -311,6 +341,7 @@ if __name__=="__main__":
     optparser.add_option('-r','--args', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}", help="Classifier arguments")
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
     optparser.add_option("--cafa", default=False, action="store_true", help="Process CAFA predictions")
+    optparser.add_option("--task", default="cafa3")
     (options, args) = optparser.parse_args()
     
     options.args = eval(options.args)
@@ -318,4 +349,4 @@ if __name__=="__main__":
             classifier=options.classifier, classifierArgs=options.args, develFolds=options.develFolds,
             useCafa=options.cafa,
             useCombinations=options.simple, useLearning=options.learning, baselineCutoff=options.baseline,
-            numTerms=options.terms, clear=options.clear, useOutFiles=options.write)
+            numTerms=options.terms, clear=options.clear, useOutFiles=options.write, task=options.task)

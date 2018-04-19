@@ -277,7 +277,10 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         predKeys += ["cls_pred"]
     if baselineCutoff > 0:
         print "Loading baseline predictions"
-        loading.loadBaseline(dataPath, proteins, "baseline_pred", baselineCutoff, limitTerms, useCafa=useCafa)
+        baselinePath = dataPath
+        if task == "cafapi":
+            baselinePath = os.path.join(dataPath, "CAFA_PI")
+        loading.loadBaseline(baselinePath, proteins, "baseline_pred", baselineCutoff, limitTerms, useCafa=useCafa)
         predKeys += ["baseline_pred"]
     
     if useCombinations:
@@ -306,6 +309,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
                         results = evaluation.evaluate(examples["labels"], examples["predictions"], examples, terms=None, averageOnly=True, noAUC=True)
                         print "Average for", str(combination) + "/" + setName + "/" + mode + ":", evaluation.metricsToString(results["average"])
                     except TypeError as e:
+                        print "WARNING! Cannot evaluate results."
                         print e
                     #else:
                     #    print "Skipping evaluation for set '" + setName + "'"

@@ -5,11 +5,14 @@ import operator
 from collections import Counter
 from learning.featureBuilders import *
 import json
+from learning.classification import Classification, SingleLabelClassification
+import utils.statistics as statistics
 
 class Task(object):
     def __init__(self):
         self.proteins = None
         self.examples = None
+        self.debug = False
         
         self.dataPath = None
         self.sequencesPath = None
@@ -27,6 +30,15 @@ class Task(object):
         self.allowMissing = False
         self.limitTrainingToAnnotated = False
     
+    ###########################################################################
+    # Loading
+    ###########################################################################
+    
+    def setDebug(self, debug):
+        self.debug = debug
+        for group in self.features:
+            self.features[group].debug = debug
+    
     def setDataPath(self, dataPath):
         assert self.dataPath == None
         self.dataPath = dataPath
@@ -36,6 +48,7 @@ class Task(object):
             self.annotationsPath = self._getPath(self.annotationsPath)
             self.splitPath = self._getPath(self.splitPath)
             self.foldsPath = self._getPath(self.foldsPath)
+            self.termsPath = self._getPath(self.termsPath)
             for group in self.features:
                 self.features[group].setDataPath(dataPath)
     
@@ -56,6 +69,9 @@ class Task(object):
         topTerms = self.getTopTerms(self.termCounts, self.numTerms)
         print "Using", len(topTerms), "most common GO terms"
     
+    def getTopTerms(self, counts, num=1000):
+        return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
+    
     def loadSplit(self, fold=None):
         loading.loadSplit(self.splitPath, self.proteins, self.allowMissing)
         if self.remapSets != None:
@@ -68,11 +84,21 @@ class Task(object):
             makeFolds.loadFolds(self.proteins, self.foldsPath)
         loading.defineSets(self.proteins, self.cafaTargets, fold=fold, limitTrainingToAnnotated = self.limitTrainingToAnnotated)
     
+    ###########################################################################
+    # Example Generation
+    ###########################################################################
+    
     def _getFeatureGroups(self, groups=None):
         if groups == None:
             groups = self.defaultFeatures if self.defaultFeatures != None else sorted(self.features.keys())
-            groups = ["all"]
-        return [x for x in groups if not x.startswith("-")]
+        if "all" in groups:
+            groups.remove("all")
+            groups = groups + sorted(self.features.keys())
+        removed = [x for x in groups if x.startswith("-")]
+        groups = [x for x in groups if not x.startswith("-")]
+        for group in removed:
+            groups.remove(group.strip("-"))
+        return groups
     
     def buildExamples(self, groups=None, limit=None, limitTerms=None, featureGroups=None):
         print "Building examples"
@@ -124,22 +150,43 @@ class Task(object):
         with gzip.open(exampleFilePath, "rt") as pickleFile:
             self.examples = json.load(pickleFile)
     
+    ###########################################################################
+    # Classification
+    ###########################################################################
+    
     def vectorizeExamples(self):
         loading.vectorizeExamples(self.examples)
     
-    def getTopTerms(self, counts, num=1000):
-        return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
-        
+    def classify(self, outDir, classifier=None, classifierArgs=None, singleLabelJobs=None, negatives=False, useTestSet=False):
+        terms = loading.loadGOTerms(self.termsPath)
+        if not os.path.exists(os.path.join(outDir, "features.tsv")):
+            loading.saveFeatureNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        if singleLabelJobs == None:
+            cls = Classification()
+        else:
+            cls = SingleLabelClassification(singleLabelJobs)
+        cls.optimize(classifier, classifierArgs, self.examples, terms=terms, 
+                     outDir=outDir, negatives=negatives,
+                     useTestSet=useTestSet, useCAFASet=(self.cafaTargets != "skip"))
+    
+    def makeStatistics(self, outDir):
+        statistics.makeStatistics(self.examples, outDir)
+                
 
 class CAFAPITask(Task):
     def __init__(self):
         Task.__init__(self)
+        
+        self.remapSets = {"test":"devel"}
+        self.allowMissing = False
+        self.limitTrainingToAnnotated = True
         
         self.sequencesPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_sequence.tsv.gz"
         self.targetsPath = "CAFA_PI/Swissprot/target.all.fasta.gz"
         self.annotationsPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_propagated.tsv.gz"
         self.splitPath = "CAFA_PI/Swissprot"
         self.foldsPath = "folds/CAFA_PI_training_folds_180417.tsv.gz"
+        self.termsPath = "GO/go_terms.tsv"
         
         self.features = {
             "taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
@@ -154,3 +201,4 @@ class CAFAPITask(Task):
             "funtaxis":FunTaxISFeatureBuilder(["FunTaxIS"]),
             "ngrams":NGramFeatureBuilder(["ngrams/4jari/min_len3-min_freq2-min1fun-top_fun5k"])
         }
+        self.defaultFeatures = ["all", "-funtaxis", "-ngrams", "-similar"]

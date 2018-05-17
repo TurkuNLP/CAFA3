@@ -249,6 +249,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     assert taskName in ("cafapi",)
     task = Task.CAFAPITask()
     task.setDataPath(dataPath)
+    task.setDebug(debug)
     
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
@@ -264,30 +265,22 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         actions = ["build", "classify", "statistics"]
     
     exampleFilePath = os.path.join(outDir, "examples.json.gz")
-    task.loadProteins()
-    task.loadSplit()
+    task.loadProteins(cafaTargets)
+    task.loadSplit(fold)
     if "build" in actions:
         print "==========", "Building Examples", "=========="
-        task.buildExamples(featureGroups)
+        task.buildExamples(featureGroups, limit)
         task.saveExamples(exampleFilePath)
     else:
         print "==========", "Loading Examples", "=========="
         task.loadExamples(exampleFilePath)
-#     if actions == None or "classify" in actions:
-#         task.vectorizeExamples()
-#         print "==========", "Training Classifier", "=========="
-#         if not os.path.exists(os.path.join(outDir, "features.tsv")):
-#             loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
-#         if singleLabelJobs == None:
-#             cls = Classification()
-#         else:
-#             cls = SingleLabelClassification(singleLabelJobs)
-#         cls.optimize(classifier, classifierArgs, examples, terms=terms, 
-#                      outDir=outDir, negatives=negatives,
-#                      useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
-#     if actions == None or "statistics" in actions:
-#         print "==========", "Calculating Statistics", "=========="
-#         statistics.makeStatistics(examples, outDir)
+    if "classify" in actions:
+        print "==========", "Training Classifier", "=========="
+        task.vectorizeExamples()
+        task.classify(outDir, classifier, classifierArgs, singleLabelJobs, negatives, useTestSet)
+    if "statistics" in actions:
+        print "==========", "Calculating Statistics", "=========="
+        task.makeStatistics(outDir)
     
 if __name__=="__main__":       
     from optparse import OptionParser
@@ -318,7 +311,7 @@ if __name__=="__main__":
     options.args = eval(options.args)
     #proteins = de
     #importProteins(os.path.join(options.dataPath, "Swiss_Prot", "Swissprot_sequence.tsv.gz"))
-    run(options.dataPath, actions=options.actions, featureGroups=options.features.split(","), 
+    run(options.dataPath, actions=options.actions, featureGroups=options.features.split(",") if options.features != None else None, 
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
         cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 

@@ -18,7 +18,7 @@ import utils.statistics as statistics
 from learning.classification import Classification, SingleLabelClassification
 import learning.loading as loading
 from collections import Counter
-import task.Task
+import task.Task as Task
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed
@@ -245,9 +245,10 @@ def runOld(dataPath, outDir=None, actions=None, featureGroups=None, classifier=N
 
 def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
         limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
-        negatives=False, singleLabelJobs=None, task="cafa3", debug=False):
-    assert task in ("cafapi",)
-    task = task.Task.CAFAPITask()
+        negatives=False, singleLabelJobs=None, taskName="cafa3", debug=False):
+    assert taskName in ("cafapi",)
+    task = Task.CAFAPITask()
+    task.setDataPath(dataPath)
     
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
@@ -267,33 +268,33 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     task.loadSplit()
     if "build" in actions:
         print "==========", "Building Examples", "=========="
-        task.buildExamples()
+        task.buildExamples(featureGroups)
         task.saveExamples(exampleFilePath)
     else:
         print "==========", "Loading Examples", "=========="
         task.loadExamples(exampleFilePath)
-    if actions == None or "classify" in actions:
-        task.vectorizeExamples()
-        print "==========", "Training Classifier", "=========="
-        if not os.path.exists(os.path.join(outDir, "features.tsv")):
-            loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
-        if singleLabelJobs == None:
-            cls = Classification()
-        else:
-            cls = SingleLabelClassification(singleLabelJobs)
-        cls.optimize(classifier, classifierArgs, examples, terms=terms, 
-                     outDir=outDir, negatives=negatives,
-                     useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
-    if actions == None or "statistics" in actions:
-        print "==========", "Calculating Statistics", "=========="
-        statistics.makeStatistics(examples, outDir)
+#     if actions == None or "classify" in actions:
+#         task.vectorizeExamples()
+#         print "==========", "Training Classifier", "=========="
+#         if not os.path.exists(os.path.join(outDir, "features.tsv")):
+#             loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
+#         if singleLabelJobs == None:
+#             cls = Classification()
+#         else:
+#             cls = SingleLabelClassification(singleLabelJobs)
+#         cls.optimize(classifier, classifierArgs, examples, terms=terms, 
+#                      outDir=outDir, negatives=negatives,
+#                      useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
+#     if actions == None or "statistics" in actions:
+#         print "==========", "Calculating Statistics", "=========="
+#         statistics.makeStatistics(examples, outDir)
     
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="")
     optparser.add_option("-a", "--actions", default=None, help="One or more of 'build', 'classify' or 'statistics'")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="The main directory for the data files")
-    optparser.add_option("-f", "--features", default="all", help="Comma-separated list of feature group names. Use 'all' for all feature groups and '-name' to remove groups.")
+    optparser.add_option("-f", "--features", default=None, help="Comma-separated list of feature group names. Use 'all' for all feature groups and '-name' to remove groups.")
     optparser.add_option("-l", "--limit", default=None, type=int, help="Limit the number of proteins to read.")
     optparser.add_option("-t", "--terms", default=100, type=int, help="The number of top most common GO terms to use as labels")
     optparser.add_option("-o", "--output", default=None, help="The output directory")
@@ -321,4 +322,4 @@ if __name__=="__main__":
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
         cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 
-        singleLabelJobs=options.singleLabelJobs, task=options.task, debug=options.debug)
+        singleLabelJobs=options.singleLabelJobs, taskName=options.task, debug=options.debug)

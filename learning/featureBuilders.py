@@ -222,10 +222,11 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
     def __init__(self, inPaths):
         filePatterns = [re.compile(".+\_FunTaxIS\.tsv\.gz")]
         CSVFeatureBuilder.__init__(self, inPaths, filePatterns, "FUN", "Building FunTaxIS features", None)
-        mapFilePatterns = [re.compile("map\_.+\_organism\.tsv\.gz")]
-        self.mapping = self.readMapping(inPaths, mapFilePatterns)
+        self.mapFilePatterns = [re.compile("map\_.+\_organism\.tsv\.gz")]
     
     def buildForFile(self, filePath, protById):
+        if self.mapping == None:
+            self.mapping = self.readMapping(self.inPaths, self.mapFilePatterns)
         with gzip.open(filePath, "rt") as f:
             reader = csv.DictReader(f, delimiter=self.delimiter, fieldnames=self.columns)
             current_ncbitax_id = None
@@ -272,9 +273,17 @@ class FunTaxISFeatureBuilder(CSVFeatureBuilder):
 class UniprotFeatureBuilder(FeatureBuilder):
     def __init__(self, inPath):
         FeatureBuilder.__init__(self)
-        self.loadSimilar(inPath)
+        self.inPath = inPath
+        self.data = None
+    
+    def setDataPath(self, dataPath):
+        FeatureBuilder.setDataPath(self, dataPath)
+        if dataPath != None:
+            self.inPath = os.path.join(dataPath, self.inPath)
     
     def build(self, proteins):
+        if self.data == None:
+            self.loadSimilar(self.inPath)
         print "Building Uniprot similar.txt features"
         self.beginCoverage([x.get("id") for x in proteins])
         for protein in proteins:

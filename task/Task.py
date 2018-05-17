@@ -7,11 +7,11 @@ from learning.featureBuilders import *
 import json
 
 class Task(object):
-    def __init__(self, dataPath):
+    def __init__(self):
         self.proteins = None
         self.examples = None
         
-        self.dataPath = dataPath
+        self.dataPath = None
         self.sequencesPath = None
         self.targetsPath = None
         self.annotationsPath = None
@@ -27,7 +27,7 @@ class Task(object):
         self.allowMissing = False
         self.limitTrainingToAnnotated = False
     
-    def setPaths(self, dataPath):
+    def setDataPath(self, dataPath):
         assert self.dataPath == None
         self.dataPath = dataPath
         if dataPath != None:
@@ -46,7 +46,7 @@ class Task(object):
         assert cafaTargets in ("skip", "overlap", "separate", "external")
         self.cafaTargets = cafaTargets
         self.proteins = {}
-        loading.loadFASTA(self.getPath(self.sequencesPath), self.proteins)
+        loading.loadFASTA(self.sequencesPath, self.proteins)
         if cafaTargets != "skip" and self.targetsPath != None:
             loading.loadFASTA(self.targetsPath, self.proteins, True)
         if self.removeNonHuman:
@@ -67,17 +67,6 @@ class Task(object):
         if fold != None:
             makeFolds.loadFolds(self.proteins, self.foldsPath)
         loading.defineSets(self.proteins, self.cafaTargets, fold=fold, limitTrainingToAnnotated = self.limitTrainingToAnnotated)
-    
-    def buildFeatures(self):
-        featuresDataPath = dataPath
-        if task == "cafapi":
-            featuresDataPath = os.path.join(dataPath, "CAFA_PI", "features")
-        print "Loading features from", featuresDataPath
-        examples = buildExamples(proteins, featuresDataPath, limit, limitTerms=set([x[0] for x in topTerms]), featureGroups=featureGroups, debug=debug)
-        print "Saving examples to", exampleFilePath
-        with gzip.open(exampleFilePath, "wt") as pickleFile:
-            json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
-        loading.vectorizeExamples(examples, featureGroups)
     
     def _getFeatureGroups(self, groups=None):
         if groups == None:

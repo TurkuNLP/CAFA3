@@ -203,7 +203,7 @@ def learn(examples, Classifier, classifierArgs, develFolds=10, verbose=3, n_jobs
     print "Average for test set:", evaluation.metricsToString(results["average"])
     binaryToMultiLabel(examples, allPredictions, allProbabilities, predKey)
 
-def loadPredictionFiles(proteins, predPath, predKey, useCafa, task, predTag):
+def loadPredictionFiles(proteins, predPath, predKey, useCafa, task, predTag, readGold):
     inPaths = []
     if os.path.isfile(predPath):
         inPaths = [predPath]
@@ -213,7 +213,7 @@ def loadPredictionFiles(proteins, predPath, predKey, useCafa, task, predTag):
                 continue
             inPaths.append(os.path.join(predPath, setName + predTag[setName] + ".tsv.gz"))
     for inPath in inPaths:
-        evaluateFile.loadPredictions(proteins, inPath, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=False, predKey=predKey, confKey=predKey + "_conf")
+        evaluateFile.loadPredictions(proteins, inPath, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=readGold, predKey=predKey, confKey=predKey + "_conf")
     
 def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifierArgs=None, develFolds=5, useCafa=False, useCombinations=True, useLearning=True, baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True, task="cafa3"):
     if outDir != None:
@@ -263,7 +263,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
     predKeys = []
     if nnInput != None:
         print "Loading neural network predictions from", nnInput
-        loadPredictionFiles(proteins, nnInput, "nn_pred", useCafa, task, {"cafa":"_targets", "devel":"_pred", "test":"_pred"})
+        loadPredictionFiles(proteins, nnInput, "nn_pred", useCafa, task, {"cafa":"_targets", "devel":"_pred", "test":"_pred"}, readGold=False)
 #         for setName in (("devel", "test", "cafa") if useCafa else ("devel", "test")):
 #             if setName == "test" and task == "cafapi":
 #                 continue
@@ -272,7 +272,7 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
         predKeys += ["nn_pred"]
     if clsInput != None:
         print "Loading classifier predictions"
-        loadPredictionFiles(proteins, clsInput, "cls_pred", useCafa, task, {"cafa":"-predictions", "devel":"-predictions", "test":"-predictions"})
+        loadPredictionFiles(proteins, clsInput, "cls_pred", useCafa, task, {"cafa":"-predictions", "devel":"-predictions", "test":"-predictions"}, readGold=True)
 #        evaluateFile.loadPredictions(proteins, clsInput, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=True, predKey="cls_pred", confKey="cls_pred_conf")
         predKeys += ["cls_pred"]
     if baselineCutoff > 0:
@@ -282,6 +282,14 @@ def combine(dataPath, nnInput, clsInput, outDir=None, classifier=None, classifie
             baselinePath = os.path.join(dataPath, "CAFA_PI")
         loading.loadBaseline(baselinePath, proteins, "baseline_pred", baselineCutoff, limitTerms, useCafa=useCafa)
         predKeys += ["baseline_pred"]
+    
+    coverage = {x:0 for x in predKeys}
+    coverage["total"] = len(proteins)
+    for protId in proteins:
+        for predKey in predKeys:
+            if predKey in proteins[protId]:
+                coverage[predKey] += 1
+    print "Coverage:", coverage
     
     if useCombinations:
         print "===============", "Combining predictions", "===============" 

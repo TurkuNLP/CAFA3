@@ -4,10 +4,12 @@ import learning.makeFolds as makeFolds
 import operator
 from collections import Counter
 from learning.featureBuilders import *
+import json
 
 class Task(object):
     def __init__(self, dataPath):
         self.proteins = None
+        self.examples = None
         
         self.dataPath = dataPath
         self.sequencesPath = None
@@ -16,11 +18,8 @@ class Task(object):
         self.splitPath = None
         self.foldsPath = None
         
-        self.builders = {"taxonomy":TaxonomyFeatureBuilder,
-                         }
-        
-        self.features = {"taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
-                         "similar":UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt")),}
+        self.features = None
+        self.defaultFeatures = None
         
         self.numTerms = 1000
         self.removeNonHuman = False
@@ -28,8 +27,20 @@ class Task(object):
         self.allowMissing = False
         self.limitTrainingToAnnotated = False
     
-    def getPath(self, subPathComponents):
-        return os.path.join(self.dataPath, subPathComponents)
+    def setPaths(self, dataPath):
+        assert self.dataPath == None
+        self.dataPath = dataPath
+        if dataPath != None:
+            self.sequencesPath = self._getPath(self.sequencesPath)
+            self.targetsPath = self._getPath(self.targetsPath)
+            self.annotationsPath = self._getPath(self.annotationsPath)
+            self.splitPath = self._getPath(self.splitPath)
+            self.foldsPath = self._getPath(self.foldsPath)
+            for group in self.features:
+                self.features[group].setDataPath(dataPath)
+    
+    def _getPath(self, subPath):
+        return os.path.join(self.dataPath, subPath) if subPath != None else None
     
     def loadProteins(self, cafaTargets="skip"):
         assert cafaTargets in ("skip", "overlap", "separate", "external")
@@ -68,19 +79,89 @@ class Task(object):
             json.dump(examples, pickleFile, indent=2) #pickle.dump(examples, pickleFile)
         loading.vectorizeExamples(examples, featureGroups)
     
+    def _getFeatureGroups(self, groups=None):
+        if groups == None:
+            groups = self.defaultFeatures if self.defaultFeatures != None else sorted(self.features.keys())
+            groups = ["all"]
+        return [x for x in groups if not x.startswith("-")]
+    
+    def buildExamples(self, groups=None, limit=None, limitTerms=None, featureGroups=None):
+        print "Building examples"
+        self.examples = {"labels":[], "features":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
+        protIds = sorted(self.proteins.keys())
+        if limit:
+            protIds = protIds[0:limit]
+        protObjs = [self.proteins[key] for key in protIds]
+        for protein in protObjs:
+            # Initialize features
+            protein["features"] = {"DUMMY:dummy":1}
+            # Build labels
+            labels = protein["terms"].keys()
+            if limitTerms:
+                labels = [x for x in labels if x in limitTerms]
+            labels = sorted(labels)
+            #if len(labels) == 0:
+            #    labels = ["no_annotations"]
+            for label in labels:
+                if label not in self.examples["label_size"]:
+                    self.examples["label_size"][label] = 0
+                self.examples["label_size"][label] += 1
+            self.examples["labels"].append(labels)
+            self.examples["ids"].append(protein["id"])
+            self.examples["cafa_ids"].append(protein["cafa_ids"])
+            self.examples["sets"].append(protein["sets"])
+        # Build features
+        groups = self._getFeatureGroups(groups)
+        print "Building features, feature groups =", featureGroups
+        for group in groups:
+            if group not in self.features.keys():
+                raise Exception("Unknown feature group '" + str(group) + "'")
+            print "Building features for group", group
+            self.features[group].build(protObjs)
+        self.examples["features"] = [x["features"] for x in protObjs]
+        for protObj in protObjs:
+            del protObj["features"]
+        # Prepare the examples
+        print "Built", len(self.examples["labels"]), "examples" # with", len(examples["feature_names"]), "unique features"
+        return self.examples
+    
+    def saveExamples(self, exampleFilePath):
+        print "Saving examples to", exampleFilePath
+        with gzip.open(exampleFilePath, "wt") as pickleFile:
+            json.dump(self.examples, pickleFile, indent=2)
+    
+    def loadExamples(self, exampleFilePath):
+        print "Loading examples from", exampleFilePath
+        with gzip.open(exampleFilePath, "rt") as pickleFile:
+            self.examples = json.load(pickleFile)
+    
+    def vectorizeExamples(self):
+        loading.vectorizeExamples(self.examples)
+    
     def getTopTerms(self, counts, num=1000):
         return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
         
 
 class CAFAPITask(Task):
-    def __init__(self, dataPath):
-        Task.__init__(self, dataPath)
+    def __init__(self):
+        Task.__init__(self)
         
-        self.sequencesPath = self.getPath(["CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_sequence.tsv.gz"])
-        self.targetsPath = self.getPath(["CAFA_PI", "Swissprot", "target.all.fasta.gz"])
-        self.annotationsPath = self.getPath(["CAFA_PI", "Swissprot", "CAFA_PI_Swissprot_propagated.tsv.gz"])
-        self.splitPath = self.getPath(["CAFA_PI", "Swissprot"])
-        self.foldsPath = self.getPath(["folds", "CAFA_PI_training_folds_180417.tsv.gz"])
+        self.sequencesPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_sequence.tsv.gz"
+        self.targetsPath = "CAFA_PI/Swissprot/target.all.fasta.gz"
+        self.annotationsPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_propagated.tsv.gz"
+        self.splitPath = "CAFA_PI/Swissprot"
+        self.foldsPath = "folds/CAFA_PI_training_folds_180417.tsv.gz"
         
-        self.features = {"taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
-                         "similar":UniprotFeatureBuilder(os.path.join(dataPath, "Uniprot", "similar.txt")),}
+        self.features = {
+            "taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
+            "similar":UniprotFeatureBuilder("Uniprot/similar.txt"),
+            "blast":BlastFeatureBuilder(["temp_blastp_result_features", "blastp_result_features"]),
+            "blast62":BlastFeatureBuilder(["CAFA2/training_features", "CAFA2/CAFA3_features"], tag="BLAST62"),
+            "delta":BlastFeatureBuilder(["temp_deltablast_result_features", "deltablast_result_features"], tag="DELTA"),
+            "interpro":InterProScanFeatureBuilder(["temp_interproscan_result_features", "interproscan_result_features"]),
+            "predgpi":PredGPIFeatureBuilder(["predGPI"]),
+            "nucpred":NucPredFeatureBuilder(["nucPred"]),
+            "netacet":NetAcetFeatureBuilder(["NetAcet"]),
+            "funtaxis":FunTaxISFeatureBuilder(["FunTaxIS"]),
+            "ngrams":NGramFeatureBuilder(["ngrams/4jari/min_len3-min_freq2-min1fun-top_fun5k"])
+        }

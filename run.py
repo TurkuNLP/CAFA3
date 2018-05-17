@@ -18,6 +18,7 @@ import utils.statistics as statistics
 from learning.classification import Classification, SingleLabelClassification
 import learning.loading as loading
 from collections import Counter
+import task.Task
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed
@@ -143,7 +144,7 @@ def buildExamples(proteins, dataPath, limit=None, limitTerms=None, featureGroups
 def getTopTerms(counts, num=1000):
     return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
 
-def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
+def runOld(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
         limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
         negatives=False, singleLabelJobs=None, task="cafa3", debug=False):
     assert task in ("cafa3", "cafa3hpo", "cafapi")
@@ -242,6 +243,51 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     #classify(y, X)
     #print time.strftime('%X %x %Z')
 
+def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
+        limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
+        negatives=False, singleLabelJobs=None, task="cafa3", debug=False):
+    assert task in ("cafapi",)
+    task = task.Task.CAFAPITask()
+    
+    if clear and os.path.exists(outDir):
+        print "Removing output directory", outDir
+        shutil.rmtree(outDir)
+    if not os.path.exists(outDir):
+        print "Making output directory", outDir
+        os.makedirs(outDir)
+    Stream.openLog(os.path.join(options.output, "log.txt"))
+    if actions != None:
+        for action in actions:
+            assert action in ("build", "classify", "statistics")
+    else:
+        actions = ["build", "classify", "statistics"]
+    
+    exampleFilePath = os.path.join(outDir, "examples.json.gz")
+    task.loadProteins()
+    task.loadSplit()
+    if "build" in actions:
+        print "==========", "Building Examples", "=========="
+        task.buildExamples()
+        task.saveExamples(exampleFilePath)
+    else:
+        print "==========", "Loading Examples", "=========="
+        task.loadExamples(exampleFilePath)
+    if actions == None or "classify" in actions:
+        task.vectorizeExamples()
+        print "==========", "Training Classifier", "=========="
+        if not os.path.exists(os.path.join(outDir, "features.tsv")):
+            loading.saveFeatureNames(examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        if singleLabelJobs == None:
+            cls = Classification()
+        else:
+            cls = SingleLabelClassification(singleLabelJobs)
+        cls.optimize(classifier, classifierArgs, examples, terms=terms, 
+                     outDir=outDir, negatives=negatives,
+                     useTestSet=useTestSet, useCAFASet=(cafaTargets != "skip"))
+    if actions == None or "statistics" in actions:
+        print "==========", "Calculating Statistics", "=========="
+        statistics.makeStatistics(examples, outDir)
+    
 if __name__=="__main__":       
     from optparse import OptionParser
     optparser = OptionParser(description="")

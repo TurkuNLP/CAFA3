@@ -277,7 +277,7 @@ def saveFeatureNames(names, outPath):
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
     
-def vectorizeExamples(examples, featureGroups, sparseLabels=False):
+def vectorizeExamples(examples, featureGroups=None, sparseLabels=False):
     mlb = MultiLabelBinarizer(sparse_output=sparseLabels)  
     if "predictions" in examples and examples["predictions"] != None:
         #examples["labels"] = mlb.fit_transform(examples["labels"])

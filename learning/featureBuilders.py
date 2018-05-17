@@ -14,6 +14,9 @@ class FeatureBuilder:
     def build(self, proteins):
         pass
     
+    def setDataPath(self, dataPath):
+        pass
+    
     def setFeature(self, protein, feature, value=1):
         protein["features"][feature] = value
     
@@ -63,6 +66,11 @@ class MultiFileFeatureBuilder(FeatureBuilder):
         self.inPaths = inPaths
         self.filePatterns = filePatterns
         self.message = message
+    
+    def setDataPath(self, dataPath):
+        FeatureBuilder.setDataPath(self, dataPath)
+        if dataPath != None:
+            self.inPaths = [os.path.join(dataPath, x) for x in self.inPaths]
     
     def build(self, proteins):
         print self.message

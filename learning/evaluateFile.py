@@ -56,7 +56,7 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
         reader = csv.DictReader(f, delimiter='\t')
         protein = None
         rowCountKey = "rows:" + predKey
-        counts = {"duplicates":0, "duplicates-preserved":0, rowCountKey:0, "protein-not-loaded":0, "out-of-sets":0}
+        counts = {"duplicates":0, "duplicates-preserved":0, rowCountKey:0, "protein-not-loaded":0, "out-of-sets":0, "predicted_1":0}
         currentId = None
         for row in reader:
             if currentId != row["id"]:
@@ -87,6 +87,7 @@ def loadPredictions(proteins, inPath, limitToSets, readGold=True, predKey="predi
                     protein = None
             if protein != None:
                 if row["predicted"] == "1":
+                    counts["predicted_1"] += 1
                     protein[predKey][row["label"]] = 1
                     if confKey != None:
                         protein[confKey][row["label"]] = float(row["confidence"])

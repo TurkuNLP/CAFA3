@@ -4,17 +4,17 @@ from learning.featureBuilders import *
 class CAFA3Task(Task):
     def __init__(self):
         Task.__init__(self)
-        
+        # Task settings
         self.allowMissing = False
         self.limitTrainingToAnnotated = True
-        
+        # Data files
         self.sequencesPath = "Swiss_Prot/Swissprot_sequence.tsv.gz"
         self.targetsPath = "CAFA3_targets/Target_files/target.all.fasta"
         self.annotationsPath = "Swissprot_propagated.tsv.gz"
         self.splitPath = "data"
         self.foldsPath = "folds/training_folds_170125.tsv.gz"
         self.termsPath = "GO/go_terms.tsv"
-        
+        # Feature settings
         self.features = {
             "taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
             "similar":UniprotFeatureBuilder("Uniprot/similar.txt"),
@@ -28,31 +28,33 @@ class CAFA3Task(Task):
             "funtaxis":FunTaxISFeatureBuilder(["FunTaxIS"]),
             "ngrams":NGramFeatureBuilder(["ngrams/4jari/min_len3-min_freq2-min1fun-top_fun5k"])
         }
-        self.defaultFeatures = ["all", "-funtaxis", "-ngrams", "-similar"]
+        self.defaultFeatures = ["taxonomy", "blast", "delta", "interpro", "predgpi"]
 
 class CAFA3HPOTask(CAFA3Task):
     def __init__(self):
         CAFA3Task.__init__(self)
-        
-        self.allowMissing = True        
+        # Redefine some CAFA3 task settings
+        self.removeNonHuman = True
+        self.allowMissing = True
+        self.annotationFormat = "HPO"
         self.annotationsPath = "HPO/annotation/all_cafa_annotation_propagated.tsv.gz"
         self.termsPath = "HPO/ontology/hp.obo"
 
 class CAFAPITask(Task):
     def __init__(self):
         Task.__init__(self)
-        
+        # Task settings
         self.remapSets = {"test":"devel"}
         self.allowMissing = True
         self.limitTrainingToAnnotated = False
-        
+        # Data files
         self.sequencesPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_sequence.tsv.gz"
         self.targetsPath = "CAFA_PI/Swissprot/target.all.fasta.gz"
         self.annotationsPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_propagated.tsv.gz"
         self.splitPath = "CAFA_PI/Swissprot"
         self.foldsPath = "folds/CAFA_PI_training_folds_180417.tsv.gz"
         self.termsPath = "GO/go_terms.tsv"
-        
+        # Feature settings
         self.features = {
             "taxonomy":TaxonomyFeatureBuilder(["CAFA_PI/features/Taxonomy"]),
             "blast":BlastFeatureBuilder(["CAFA_PI/features/temp_blastp_result_features", "CAFA_PI/features/blastp_result_features"]),

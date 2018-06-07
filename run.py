@@ -18,7 +18,7 @@ import utils.statistics as statistics
 from learning.classification import Classification, SingleLabelClassification
 import learning.loading as loading
 from collections import Counter
-from task.Task import Task
+from task.tasks import Task
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed

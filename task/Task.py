@@ -1,9 +1,9 @@
 import sys, os
+import gzip
 import learning.loading as loading
 import learning.makeFolds as makeFolds
 import operator
 from collections import Counter
-from learning.featureBuilders import *
 import json
 from learning.classification import Classification, SingleLabelClassification
 import utils.statistics as statistics
@@ -29,25 +29,30 @@ class Task(object):
     ###########################################################################
     
     def __init__(self):
+        # Internal data structures
         self.proteins = None
         self.examples = None
         self.debug = False
         
-        self.dataPath = None
-        self.sequencesPath = None
-        self.targetsPath = None
-        self.annotationsPath = None
-        self.splitPath = None
-        self.foldsPath = None
+        # Task Specific Settings ##############################################
         
-        self.features = None
-        self.defaultFeatures = None
-        
-        self.numTerms = 1000
-        self.removeNonHuman = False
-        self.remapSets = None
-        self.allowMissing = False
-        self.limitTrainingToAnnotated = False
+        # File paths
+        self.dataPath = None # The main data path (all other paths are relative to this)
+        self.sequencesPath = None # Sequences in the FASTA format
+        self.targetsPath = None # Sequences in the FASTA format
+        self.annotationsPath = None # Ontology term annotations for the sequences
+        self.splitPath = None # The directory containing the train/devel/test split
+        self.foldsPath = None # A file containing the n-fold cross-validation groups
+        # Feature Groups
+        self.features = None # A dictionary of feature group name / FeatureBuilder pairs
+        self.defaultFeatures = None # The list of the names of the feature groups which are used by default
+        # Task Configuration
+        self.numTerms = 5000 # The cutoff for the n most common terms
+        self.removeNonHuman = False # Remove all proteins where the species != human (for the HPO task)
+        self.remapSets = None # A dictionary for remapping sets, e.g. {"test":"devel"}
+        self.allowMissing = False # Whether all protein ids in the train/devel/set must exists among the loaded proteins
+        self.limitTrainingToAnnotated = False # Remove all proteins which have no annotated terms
+        self.annotationFormat = "GO" # 'GO' or 'HPO' annotation file format
     
     ###########################################################################
     # Loading
@@ -83,7 +88,11 @@ class Task(object):
             loading.loadFASTA(self.targetsPath, self.proteins, True)
         if self.removeNonHuman:
             loading.removeNonHuman(self.proteins)
-        self.termCounts = loading.loadAnnotations(self.annotationsPath, self.proteins)
+        assert self.annotationFormat in ("GO", "HPO")
+        if self.annotationFormat == "GO":
+            self.termCounts = loading.loadAnnotations(self.annotationsPath, self.proteins)
+        else:
+            self.termCounts = loading.loadHPOAnnotations(self.annotationsPath, self.proteins)
         print "Unique terms:", len(self.termCounts)
         topTerms = self.getTopTerms(self.termCounts, self.numTerms)
         print "Using", len(topTerms), "most common GO terms"
@@ -190,72 +199,3 @@ class Task(object):
     
     def makeStatistics(self, outDir):
         statistics.makeStatistics(self.examples, outDir)
-
-class CAFA3Task(Task):
-    def __init__(self):
-        Task.__init__(self)
-        
-        self.allowMissing = False
-        self.limitTrainingToAnnotated = True
-        
-        self.sequencesPath = "Swiss_Prot/Swissprot_sequence.tsv.gz"
-        self.targetsPath = "CAFA3_targets/Target_files/target.all.fasta"
-        self.annotationsPath = "Swissprot_propagated.tsv.gz"
-        self.splitPath = "data"
-        self.foldsPath = "folds/training_folds_170125.tsv.gz"
-        self.termsPath = "GO/go_terms.tsv"
-        
-        self.features = {
-            "taxonomy":TaxonomyFeatureBuilder(["Taxonomy"]),
-            "similar":UniprotFeatureBuilder("Uniprot/similar.txt"),
-            "blast":BlastFeatureBuilder(["temp_blastp_result_features", "blastp_result_features"]),
-            "blast62":BlastFeatureBuilder(["CAFA2/training_features", "CAFA2/CAFA3_features"], tag="BLAST62"),
-            "delta":BlastFeatureBuilder(["temp_deltablast_result_features", "deltablast_result_features"], tag="DELTA"),
-            "interpro":InterProScanFeatureBuilder(["temp_interproscan_result_features", "interproscan_result_features"]),
-            "predgpi":PredGPIFeatureBuilder(["predGPI"]),
-            "nucpred":NucPredFeatureBuilder(["nucPred"]),
-            "netacet":NetAcetFeatureBuilder(["NetAcet"]),
-            "funtaxis":FunTaxISFeatureBuilder(["FunTaxIS"]),
-            "ngrams":NGramFeatureBuilder(["ngrams/4jari/min_len3-min_freq2-min1fun-top_fun5k"])
-        }
-        self.defaultFeatures = ["all", "-funtaxis", "-ngrams", "-similar"]
-
-class CAFA3HPOTask(CAFA3Task):
-    def __init__(self):
-        CAFA3Task.__init__(self)
-        
-        self.allowMissing = True        
-        self.annotationsPath = "HPO/annotation/all_cafa_annotation_propagated.tsv.gz"
-        self.termsPath = "HPO/ontology/hp.obo"
-
-class CAFAPITask(Task):
-    def __init__(self):
-        Task.__init__(self)
-        
-        self.remapSets = {"test":"devel"}
-        self.allowMissing = True
-        self.limitTrainingToAnnotated = False
-        
-        self.sequencesPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_sequence.tsv.gz"
-        self.targetsPath = "CAFA_PI/Swissprot/target.all.fasta.gz"
-        self.annotationsPath = "CAFA_PI/Swissprot/CAFA_PI_Swissprot_propagated.tsv.gz"
-        self.splitPath = "CAFA_PI/Swissprot"
-        self.foldsPath = "folds/CAFA_PI_training_folds_180417.tsv.gz"
-        self.termsPath = "GO/go_terms.tsv"
-        
-        self.features = {
-            "taxonomy":TaxonomyFeatureBuilder(["CAFA_PI/features/Taxonomy"]),
-            "blast":BlastFeatureBuilder(["CAFA_PI/features/temp_blastp_result_features", "CAFA_PI/features/blastp_result_features"]),
-            "blast62":BlastFeatureBuilder(["CAFA_PI/features/CAFA2/training_features", "CAFA_PI/features/CAFA2/CAFA3_features"], tag="BLAST62"),
-            "delta":BlastFeatureBuilder(["CAFA_PI/features/temp_deltablast_result_features", "CAFA_PI/features/deltablast_result_features"], tag="DELTA"),
-            "interpro":InterProScanFeatureBuilder(["CAFA_PI/features/temp_interproscan_result_features", "CAFA_PI/features/interproscan_result_features"]),
-            "predgpi":PredGPIFeatureBuilder(["CAFA_PI/features/predGPI"]),
-            "nucpred":NucPredFeatureBuilder(["CAFA_PI/features/nucPred"]),
-            "netacet":NetAcetFeatureBuilder(["CAFA_PI/features/NetAcet"])
-        }
-        self.defaultFeatures = ["all"]
-
-# Register the tasks
-Task.registerTask(CAFA3Task, "cafa3")
-Task.registerTask(CAFA3HPOTask, "cafa3hpo")
-Task.registerTask(CAFAPITask, "cafapi")

@@ -18,7 +18,7 @@ import utils.statistics as statistics
 from learning.classification import Classification, SingleLabelClassification
 import learning.loading as loading
 from collections import Counter
-import task.Task as Task
+from task.Task import Task
 
 # from sklearn.utils.validation import check_X_y, has_fit_parameter
 # from sklearn.externals.joblib.parallel import Parallel, delayed
@@ -246,11 +246,6 @@ def runOld(dataPath, outDir=None, actions=None, featureGroups=None, classifier=N
 def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
         limit=None, numTerms=100, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
         negatives=False, singleLabelJobs=None, taskName="cafa3", debug=False):
-    assert taskName in ("cafapi",)
-    task = Task.CAFAPITask()
-    task.setDataPath(dataPath)
-    task.setDebug(debug)
-    
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
         shutil.rmtree(outDir)
@@ -263,6 +258,13 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             assert action in ("build", "classify", "statistics")
     else:
         actions = ["build", "classify", "statistics"]
+    
+    # Define the task
+    assert taskName in ("cafapi", "cafa3", "cafa3hpo")
+    task = Task.getTask(taskName)
+    task.setDataPath(dataPath)
+    task.setDebug(debug)
+    print "Task:", taskName
     
     exampleFilePath = os.path.join(outDir, "examples.json.gz")
     task.loadProteins(cafaTargets)

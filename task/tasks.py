@@ -10,7 +10,7 @@ class CAFA3Task(Task):
         # Data files
         self.sequencesPath = "Swiss_Prot/Swissprot_sequence.tsv.gz"
         self.targetsPath = "CAFA3_targets/Target_files/target.all.fasta"
-        self.annotationsPath = "Swissprot_propagated.tsv.gz"
+        self.annotationsPath = "data/Swissprot_propagated.tsv.gz"
         self.splitPath = "data"
         self.foldsPath = "folds/training_folds_170125.tsv.gz"
         self.termsPath = "GO/go_terms.tsv"

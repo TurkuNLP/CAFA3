@@ -89,10 +89,14 @@ class Task(object):
         if self.removeNonHuman:
             loading.removeNonHuman(self.proteins)
         assert self.annotationFormat in ("GO", "HPO")
-        if self.annotationFormat == "GO":
-            self.termCounts = loading.loadAnnotations(self.annotationsPath, self.proteins)
+        if self.annotationsPath:
+            if self.annotationFormat == "GO":
+                self.termCounts = loading.loadAnnotations(self.annotationsPath, self.proteins)
+            else:
+                self.termCounts = loading.loadHPOAnnotations(self.annotationsPath, self.proteins)
         else:
-            self.termCounts = loading.loadHPOAnnotations(self.annotationsPath, self.proteins)
+            print "No annotations to load"
+            self.termCounts = {}
         print "Unique terms:", len(self.termCounts)
         topTerms = self.getTopTerms(self.termCounts, self.numTerms)
         print "Using", len(topTerms), "most common GO terms"
@@ -101,15 +105,20 @@ class Task(object):
         return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
     
     def loadSplit(self, fold=None):
-        loading.loadSplit(self.splitPath, self.proteins, self.allowMissing)
-        if self.remapSets != None:
+        if self.splitPath == None:
+            print "No split to load"
             for protId in self.proteins.keys():
-                protSet = self.proteins[protId].get("split")
-                if protSet in self.remapSets:
-                    self.proteins[protId]["split"] = self.remapSets[protSet]
-            print "Remapped splits", Counter([x.get("split") for x in self.proteins.values()])
-        if fold != None:
-            makeFolds.loadFolds(self.proteins, self.foldsPath)
+                self.proteins[protId]["split"] = "undefined"
+        else:
+            loading.loadSplit(self.splitPath, self.proteins, self.allowMissing)
+            if self.remapSets != None:
+                for protId in self.proteins.keys():
+                    protSet = self.proteins[protId].get("split")
+                    if protSet in self.remapSets:
+                        self.proteins[protId]["split"] = self.remapSets[protSet]
+                print "Remapped splits", Counter([x.get("split") for x in self.proteins.values()])
+            if fold != None:
+                makeFolds.loadFolds(self.proteins, self.foldsPath)
         loading.defineSets(self.proteins, self.cafaTargets, fold=fold, limitTrainingToAnnotated = self.limitTrainingToAnnotated)
     
     ###########################################################################

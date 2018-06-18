@@ -40,6 +40,21 @@ class CAFA3HPOTask(CAFA3Task):
         self.annotationsPath = "HPO/annotation/all_cafa_annotation_propagated.tsv.gz"
         self.termsPath = "HPO/ontology/hp.obo"
 
+class CAFAQATask(CAFA3Task):
+    def __init__(self):
+        CAFA3Task.__init__(self)
+        # Redefine some CAFA3 task settings
+        self.limitTrainingToAnnotated = False
+        self.sequencesPath = "../targetFiles/target.all.fasta.gz"
+        self.targetsPath = None
+        self.annotationsPath = None
+        self.splitPath = None
+        self.features.update({
+            "blast":BlastFeatureBuilder(["blast_result_features"]),
+            "delta":BlastFeatureBuilder(["deltablast_result_features"], tag="DELTA"),
+            "interpro":InterProScanFeatureBuilder(["interproscan_result_features"]),
+        })
+
 class CAFAPITask(Task):
     def __init__(self):
         Task.__init__(self)
@@ -71,3 +86,4 @@ class CAFAPITask(Task):
 Task.registerTask(CAFA3Task, "cafa3")
 Task.registerTask(CAFA3HPOTask, "cafa3hpo")
 Task.registerTask(CAFAPITask, "cafapi")
+Task.registerTask(CAFAQATask, "cafaqa")

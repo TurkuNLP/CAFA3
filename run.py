@@ -256,7 +256,6 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     Stream.openLog(os.path.join(options.output, "log.txt"))
 
     # Define the task
-    assert taskName in ("cafapi", "cafa3", "cafa3hpo")
     task = Task.getTask(taskName)
     task.setDataPath(dataPath)
     task.setDebug(debug)

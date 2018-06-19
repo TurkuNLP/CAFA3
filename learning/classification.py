@@ -134,6 +134,9 @@ class Classification():
                 classifier = self.loadModel(classifier, idStr)
             print "Predicting sets", setNames
             data["predicted"] = classifier.predict(features)
+            if hasattr(classifier, "predict_proba"):
+                print "Predicting probabilities"
+                data["probabilities"] = classifier.predict_proba(features)
             #print len(data["predicted"])
         else:
             print "Using existing predictions for sets", setNames, len(predictions)

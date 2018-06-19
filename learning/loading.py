@@ -270,16 +270,29 @@ def defineSets(proteins, cafaTargets, fold=None, limitTrainingToAnnotated=True):
         counts[category] += 1
     print "Defined sets:", dict(counts), "Filtered:", dict(filtered)
 
-def saveFeatureNames(names, outPath):
-    print "Saving feature names to", outPath
+def saveIdNames(names, outPath):
+    print "Saving id names to", outPath
     with open(outPath, "wt") as f:
         f.write("index\tname\n")
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
+
+def loadIdNames(inPath):
+    print "Loading id names from", inPath
+    idNames = {} 
+    with open(inPath, "rt") as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        for line in reader:
+            index = int(line["index"])
+            assert index not in idNames
+            idNames[index] = line["name"]
+    print "Loaded", len(idNames), "id names"
+    return idNames
     
-def vectorizeExamples(examples, featureGroups=None, sparseLabels=False):
-    mlb = MultiLabelBinarizer(sparse_output=sparseLabels)  
+def vectorizeExamples(examples, featureGroups=None, sparseLabels=False, idPath=None):
+    mlb = MultiLabelBinarizer(sparse_output=sparseLabels)
     if "predictions" in examples and examples["predictions"] != None:
+        assert idPath == None
         #examples["labels"] = mlb.fit_transform(examples["labels"])
         #examples["predictions"] = examples["labels"]
         numLabels = len(examples["labels"])
@@ -288,11 +301,29 @@ def vectorizeExamples(examples, featureGroups=None, sparseLabels=False):
         examples["predictions"] = vector[numLabels:,:]
         print "Vectorized predictions", (examples[x].shape[1] for x in ("labels", "predictions"))
     else:
-        examples["labels"] = mlb.fit_transform(examples["labels"])
+        if idPath != None:
+            labelIdPath = os.path.join(idPath, "labels.tsv")
+            print "Vectorizing labels with existing ids from", labelIdPath
+            labelNames = loadIdNames(labelIdPath)
+            mlb = MultiLabelBinarizer([labelNames[x] for x in sorted(labelNames.keys())], sparse_output=sparseLabels)
+            mlb.fit(set(labelNames.values()))
+            examples["labels"] = mlb.transform(examples["labels"])
+        else:
+            examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
     if "features" in examples:
         dv = DictVectorizer(sparse=True)
-        examples["features"] = dv.fit_transform(examples["features"])
+        if idPath != None:
+            featureIdPath = os.path.join(idPath, "features.tsv")
+            print "Vectorizing features with existing ids from", featureIdPath
+            featureNames = loadIdNames(featureIdPath)
+            #dv.fit([featureNames])
+            dv.feature_names_ = [featureNames[x] for x in sorted(featureNames.keys())]
+            dv.vocabulary_ = dict((f, i) for i, f in enumerate(dv.feature_names_))
+            examples["features"] = dv.transform(examples["features"])
+        else:
+            print "Vectorizing features with new ids"
+            examples["features"] = dv.fit_transform(examples["features"])
         examples["feature_names"] = dv.feature_names_
     else:
         examples["feature_names"] = []

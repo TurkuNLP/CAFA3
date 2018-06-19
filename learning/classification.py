@@ -5,6 +5,8 @@ import os
 # from sklearn.externals.joblib.parallel import Parallel, delayed
 # from sklearn.multiclass import _fit_binary
 import numpy as np
+import pickle
+import gzip
 
 def importNamed(name):
     asName = name.rsplit(".", 1)[-1]
@@ -99,18 +101,34 @@ class Classification():
 #         best["results"] = evaluate(best["gold"], best["predicted"], examples, terms)
 #         return best
     
+    def saveModel(self, clf, outDir, tag):
+        modelPath = os.path.join(outDir, tag + "-model.pickle.gz")
+        with gzip.open(modelPath, "wb") as f:
+            print "Saving model", tag, "as", modelPath
+            pickle.dump(clf, f)
+    
+    def loadModel(self, inDir, tag):
+        modelPath = os.path.join(inDir, tag + "-model.pickle.gz")
+        with gzip.open(modelPath, "rb") as f:
+            print "Loading model from", modelPath
+            return pickle.load(f)
+    
     def learnSet(self, args, examples, trainSets, testSets, terms, outDir, negatives, averageOnly=False, average="micro"):
         print "Learning sets", testSets, "using sets", trainSets
         clf, data = self.learn(args, examples, trainSets, testSets, terms, averageOnly=averageOnly, average=average)
         if outDir != None:
             idStr = "_".join(sorted(testSets))
             saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
+            self.saveModel(clf, outDir, idStr)
         return clf, data
     
     def predictSets(self, examples, classifier, setNames, terms, outDir, negatives, averageOnly=False, average="micro", predictions=None):
         data = {}
         features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, setNames)
         if classifier != None:
+            if isinstance(classifier, basestring):
+                idStr = "_".join(sorted(setNames))
+                classifier = self.loadModel(classifier, idStr)
             print "Predicting sets", setNames
             data["predicted"] = classifier.predict(features)
             #print len(data["predicted"])
@@ -134,9 +152,10 @@ class Classification():
             best = self.warmStartGrid(classifierArgs, examples, terms)
         else:
             for args in ParameterGrid(classifierArgs):
-                _, data = self.learn(args, examples, ["train"], ["devel"], terms)
+                clf, data = self.learn(args, examples, ["train"], ["devel"], terms)
                 if best == None or resultIsBetter(best["results"], data["results"]):
                     best = data #{"results":results, "args":args, "predicted":predicted, "gold":develLabels}
+                    self.saveModel(clf, outDir, "devel")
                 else: # Release the not-best results
                     data = None
         print "Best classifier arguments:", best["args"]
@@ -148,6 +167,14 @@ class Classification():
             self.learnSet(best["args"], examples, ["train", "devel"], ["test"], terms, outDir, negatives)
         if useCAFASet:
             self.learnSet(best["args"], examples, ["train", "devel", "test"], ["cafa"], terms, outDir, negatives)
+    
+    def predict(self, modelPath, examples, terms=None, outDir=None, negatives=False, useTestSet=False, useCAFASet=False):
+        if outDir != None:
+            self.predictSets(examples, modelPath, ["devel"], terms, outDir, negatives)
+            if useTestSet:
+                self.predictSets(examples, modelPath, ["test"], terms, outDir, negatives)
+            if useCAFASet:
+                self.predictSets(examples, modelPath, ["cafa"], terms, outDir, negatives)        
                 
 class SingleLabelClassification(Classification):
     def __init__(self, n_jobs):

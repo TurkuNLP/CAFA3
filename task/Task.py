@@ -191,13 +191,13 @@ class Task(object):
     # Classification
     ###########################################################################
     
-    def vectorizeExamples(self):
-        loading.vectorizeExamples(self.examples)
+    def vectorizeExamples(self, idPath=None):
+        loading.vectorizeExamples(self.examples, idPath=idPath)
     
-    def classify(self, outDir, classifier=None, classifierArgs=None, singleLabelJobs=None, negatives=False, useTestSet=False):
+    def train(self, outDir, classifier=None, classifierArgs=None, singleLabelJobs=None, negatives=False, useTestSet=False):
         terms = loading.loadGOTerms(self.termsPath)
-        if not os.path.exists(os.path.join(outDir, "features.tsv")):
-            loading.saveFeatureNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        loading.saveIdNames(self.examples["label_names"], os.path.join(outDir, "labels.tsv"))
         if singleLabelJobs == None:
             cls = Classification()
         else:
@@ -205,6 +205,16 @@ class Task(object):
         cls.optimize(classifier, classifierArgs, self.examples, terms=terms, 
                      outDir=outDir, negatives=negatives,
                      useTestSet=useTestSet, useCAFASet=(self.cafaTargets != "skip"))
+    
+    def classify(self, outDir, modelPath, singleLabelJobs=None, negatives=False, useTestSet=False):
+        terms = loading.loadGOTerms(self.termsPath)
+        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        loading.saveIdNames(self.examples["label_names"], os.path.join(outDir, "labels.tsv"))
+        if singleLabelJobs == None:
+            cls = Classification()
+        else:
+            cls = SingleLabelClassification(singleLabelJobs)
+        cls.predict(modelPath, self.examples, terms=terms, outDir=outDir, negatives=negatives, useTestSet=useTestSet, useCAFASet=(self.cafaTargets != "skip"))
     
     def makeStatistics(self, outDir):
         statistics.makeStatistics(self.examples, outDir)

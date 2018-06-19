@@ -245,7 +245,7 @@ from task.tasks import Task
 
 def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None, classifierArgs=None, 
         limit=None, numTerms=None, useTestSet=False, clear=False, cafaTargets="skip", fold=None, 
-        negatives=False, singleLabelJobs=None, taskName="cafa3", debug=False):
+        negatives=False, singleLabelJobs=None, taskName="cafa3", modelPath=None, debug=False):
     # Initialize the output directory and logging
     if clear and os.path.exists(outDir):
         print "Removing output directory", outDir
@@ -266,9 +266,9 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     # Determine the requested actions
     if actions != None:
         for action in actions:
-            assert action in ("build", "classify", "statistics")
+            assert action in ("build", "train", "classify", "statistics")
     else:
-        actions = ["build", "classify", "statistics"]
+        actions = ["build", "train", "statistics"]
     
     # Run the requested actions
     exampleFilePath = os.path.join(outDir, "examples.json.gz")
@@ -281,10 +281,15 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
     else:
         print "==========", "Loading Examples", "=========="
         task.loadExamples(exampleFilePath)
-    if "classify" in actions:
+    if "train" in actions:
         print "==========", "Training Classifier", "=========="
         task.vectorizeExamples()
-        task.classify(outDir, classifier, classifierArgs, singleLabelJobs, negatives, useTestSet)
+        task.train(outDir, classifier, classifierArgs, singleLabelJobs, negatives, useTestSet)
+    if "classify" in actions:
+        print "==========", "Classifying Examples", "=========="
+        print "Classification model path:", modelPath
+        task.vectorizeExamples(modelPath)
+        task.classify(outDir, modelPath, singleLabelJobs, negatives, useTestSet)
     if "statistics" in actions:
         print "==========", "Calculating Statistics", "=========="
         task.makeStatistics(outDir)
@@ -302,6 +307,7 @@ if __name__=="__main__":
     optparser.add_option("-t", "--terms", default=None, type=int, help="Override the task limit for the number of top most common GO terms to use as labels")
     optparser.add_option("-o", "--output", default=None, help="The output directory")
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
+    optparser.add_option('-m','--modelPath', help='', default="A directory with pickled model files and feature ids. Only used with the 'classify' action.")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     #optparser.add_option("--multioutputclassifier", default=False, action="store_true", help="Use the MultiOutputClassifier to train a separate classifier for each label")
     optparser.add_option("--singleLabelJobs", default=None, type=int, help="Number of jobs for SingleLabelClassification")
@@ -325,4 +331,4 @@ if __name__=="__main__":
         limit=options.limit, numTerms=options.terms, useTestSet=options.testSet, outDir=options.output,
         clear=options.clear, classifier=options.classifier, classifierArgs=options.args, 
         cafaTargets=options.targets, fold=options.fold, negatives=options.negatives, 
-        singleLabelJobs=options.singleLabelJobs, taskName=options.task, debug=options.debug)
+        singleLabelJobs=options.singleLabelJobs, taskName=options.task, modelPath=options.modelPath, debug=options.debug)

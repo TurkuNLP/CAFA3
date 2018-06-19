@@ -38,9 +38,9 @@ def evaluate(labels, predicted, examples, terms=None, averageOnly=False, average
         assert label_name not in results
         result = {"id":label_name, "ns":None, "name":None, "auc":auc, "precision":precision, "recall":recall, "fscore":fscore, "tp":0, "fp":0, "fn":0, "tn":0}
         results[label_name] = result
-        if label_size != None:
+        if label_size != None and label_name in label_size:
             result["label_size"] = label_size[label_name]
-        if label_args != None:
+        if label_args != None and label_name in label_args:
             result["label_args"] = label_args[label_name]
         if terms != None and label_name in terms:
             term = terms[label_name]

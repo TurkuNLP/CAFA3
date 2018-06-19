@@ -49,6 +49,8 @@ class CAFAQATask(CAFA3Task):
         self.targetsPath = None
         self.annotationsPath = None
         self.splitPath = None
+        self.remapSets = {"undefined":"cafa"}
+        self.termsPath = "../../CAFA3/data/GO/go_terms.tsv"
         self.features.update({
             "blast":BlastFeatureBuilder(["blast_result_features"]),
             "delta":BlastFeatureBuilder(["deltablast_result_features"], tag="DELTA"),

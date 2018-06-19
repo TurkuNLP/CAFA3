@@ -125,6 +125,9 @@ class Classification():
     def predictSets(self, examples, classifier, setNames, terms, outDir, negatives, averageOnly=False, average="micro", predictions=None):
         data = {}
         features, data["gold"], _, data["ids"], data["cafa_ids"] = self.getSubset(examples, setNames)
+        if features.shape[0] == 0:
+            print "No examples to classify for sets", setNames
+            return None
         if classifier != None:
             if isinstance(classifier, basestring):
                 idStr = "_".join(sorted(setNames))

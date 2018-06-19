@@ -111,14 +111,16 @@ class Task(object):
                 self.proteins[protId]["split"] = "undefined"
         else:
             loading.loadSplit(self.splitPath, self.proteins, self.allowMissing)
-            if self.remapSets != None:
-                for protId in self.proteins.keys():
-                    protSet = self.proteins[protId].get("split")
-                    if protSet in self.remapSets:
-                        self.proteins[protId]["split"] = self.remapSets[protSet]
-                print "Remapped splits", Counter([x.get("split") for x in self.proteins.values()])
-            if fold != None:
-                makeFolds.loadFolds(self.proteins, self.foldsPath)
+
+        if self.remapSets != None:
+            for protId in self.proteins.keys():
+                protSet = self.proteins[protId].get("split")
+                if protSet in self.remapSets:
+                    self.proteins[protId]["split"] = self.remapSets[protSet]
+            print "Remapped splits", Counter([x.get("split") for x in self.proteins.values()])
+        if fold != None:
+            makeFolds.loadFolds(self.proteins, self.foldsPath)
+        
         loading.defineSets(self.proteins, self.cafaTargets, fold=fold, limitTrainingToAnnotated = self.limitTrainingToAnnotated)
     
     ###########################################################################

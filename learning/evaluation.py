@@ -79,7 +79,7 @@ def metricsToString(result, style="%.3f"):
 def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
     count = 0
     s = ""
-    for result in sorted(results.values(), key=lambda x: x[sortBy], reverse=True):
+    for result in sorted(results.values(), key=lambda x: (x[sortBy], x["fp"]), reverse=True):
         if skipIds != None and result["id"] in skipIds:
             continue
         s += metricsToString(result) + " " + str([result.get("id"), result.get("ns"), result.get("label_size"), result.get("name")]) + "\n"
@@ -91,7 +91,7 @@ def getResultsString(results, maxNumber=None, skipIds=None, sortBy="fscore"):
 def getResultsTable(results, maxNumber=None, skipIds=None, sortBy="fscore"):
     count = 0
     s = ""
-    for result in sorted(results.values(), key=lambda x: x[sortBy], reverse=True):
+    for result in sorted(results.values(), key=lambda x: (x[sortBy], x["fp"]), reverse=True):
         if skipIds != None and result["id"] in skipIds:
             continue
         values = ["%.3f" % result[x] for x in ("fscore", "precision", "recall")]

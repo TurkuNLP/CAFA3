@@ -98,8 +98,8 @@ class Task(object):
             print "No annotations to load"
             self.termCounts = {}
         print "Unique terms:", len(self.termCounts)
-        topTerms = self.getTopTerms(self.termCounts, self.numTerms)
-        print "Using", len(topTerms), "most common GO terms"
+        self.topTerms = self.getTopTerms(self.termCounts, self.numTerms)
+        print "Using", len(self.topTerms), "most common GO terms"
     
     def getTopTerms(self, counts, num=1000):
         return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0:num]
@@ -139,7 +139,7 @@ class Task(object):
             groups.remove(group.strip("-"))
         return groups
     
-    def buildExamples(self, groups=None, limit=None, limitTerms=None, featureGroups=None):
+    def buildExamples(self, groups=None, limit=None, limitTerms="auto", featureGroups=None):
         print "Building examples"
         self.examples = {"labels":[], "features":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
         protIds = sorted(self.proteins.keys())
@@ -152,6 +152,8 @@ class Task(object):
             # Build labels
             labels = protein["terms"].keys()
             if limitTerms:
+                if limitTerms == "auto":
+                    limitTerms = set([x[0] for x in self.topTerms])
                 labels = [x for x in labels if x in limitTerms]
             labels = sorted(labels)
             #if len(labels) == 0:

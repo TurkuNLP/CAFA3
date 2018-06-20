@@ -290,8 +290,10 @@ def loadIdNames(inPath):
     return idNames
     
 def vectorizeExamples(examples, featureGroups=None, sparseLabels=False, idPath=None):
+    print "Vectorizing examples"
     mlb = MultiLabelBinarizer(sparse_output=sparseLabels)
     if "predictions" in examples and examples["predictions"] != None:
+        print "Vectorizing predictions"
         assert idPath == None
         #examples["labels"] = mlb.fit_transform(examples["labels"])
         #examples["predictions"] = examples["labels"]
@@ -309,9 +311,11 @@ def vectorizeExamples(examples, featureGroups=None, sparseLabels=False, idPath=N
             mlb.fit(set(labelNames.values()))
             examples["labels"] = mlb.transform(examples["labels"])
         else:
+            print "Vectorizing labels with new ids"
             examples["labels"] = mlb.fit_transform(examples["labels"])
     examples["label_names"] = mlb.classes_
     if "features" in examples:
+        print "Vectorizing features"
         dv = DictVectorizer(sparse=True)
         if idPath != None:
             featureIdPath = os.path.join(idPath, "features.tsv")

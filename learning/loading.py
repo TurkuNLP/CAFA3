@@ -238,7 +238,7 @@ def defineSets(proteins, cafaTargets, fold=None, limitTrainingToAnnotated=True):
     for protId in proteins.keys():
         protein = proteins[protId]
         assert "id" in protein, protein
-        cafaSet = ["cafa"] if len(protein["cafa_ids"]) > 0 else []
+        cafaSet = ["cafa"] if (len(protein["cafa_ids"]) or "cafa" in protein["split"]) > 0 else []
         if fold != None:
             splitSet = [foldSets[protein["fold"]]] if protein.get("fold") != None else []
         else:

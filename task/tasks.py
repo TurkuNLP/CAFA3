@@ -39,23 +39,38 @@ class CAFA3HPOTask(CAFA3Task):
         self.annotationFormat = "HPO"
         self.annotationsPath = "HPO/annotation/all_cafa_annotation_propagated.tsv.gz"
         self.termsPath = "HPO/ontology/hp.obo"
-
+        
 class CAFAQATask(CAFA3Task):
     def __init__(self):
         CAFA3Task.__init__(self)
         # Redefine some CAFA3 task settings
-        self.limitTrainingToAnnotated = False
-        self.sequencesPath = "../targetFiles/target.all.fasta.gz"
-        self.targetsPath = None
-        self.annotationsPath = None
-        self.splitPath = None
+        self.targetsPath = "../../CAFA_QA/targetFiles/target.all.fasta.gz"
+        self.sequenceFormat["targets"] = "regular"
         self.remapSets = {"undefined":"cafa"}
-        self.termsPath = "../../CAFA3/data/GO/go_terms.tsv"
         self.features.update({
-            "blast":BlastFeatureBuilder(["blast_result_features"]),
-            "delta":BlastFeatureBuilder(["deltablast_result_features"], tag="DELTA"),
-            "interpro":InterProScanFeatureBuilder(["interproscan_result_features"]),
+            "taxonomy":TaxonomyFeatureBuilder(["Taxonomy"] + ["../../CAFA_QA/features/Taxonomy"], debug=True),
+            "blast":BlastFeatureBuilder(["temp_blastp_result_features", "blastp_result_features"] + ["../../CAFA_QA/features/blast_result_features"]),
+            "delta":BlastFeatureBuilder(["temp_deltablast_result_features", "deltablast_result_features"] + ["../../CAFA_QA/features/deltablast_result_features"], tag="DELTA"),
+            "interpro":InterProScanFeatureBuilder(["temp_interproscan_result_features", "interproscan_result_features"] + ["../../CAFA_QA/features/interproscan_result_features"]),
+            "predgpi":PredGPIFeatureBuilder(["predGPI"] + ["../../CAFA_QA/features/predGPI"])
         })
+
+# class CAFAQATask(CAFA3Task):
+#     def __init__(self):
+#         CAFA3Task.__init__(self)
+#         # Redefine some CAFA3 task settings
+#         self.limitTrainingToAnnotated = False
+#         self.sequencesPath = "../targetFiles/target.all.fasta.gz"
+#         self.targetsPath = None
+#         self.annotationsPath = None
+#         self.splitPath = None
+#         self.remapSets = {"undefined":"cafa"}
+#         self.termsPath = "../../CAFA3/data/GO/go_terms.tsv"
+#         self.features.update({
+#             "blast":BlastFeatureBuilder(["blast_result_features"]),
+#             "delta":BlastFeatureBuilder(["deltablast_result_features"], tag="DELTA"),
+#             "interpro":InterProScanFeatureBuilder(["interproscan_result_features"]),
+#         })
 
 class CAFAPITask(Task):
     def __init__(self):

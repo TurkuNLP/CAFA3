@@ -33,6 +33,7 @@ class Task(object):
         self.proteins = None
         self.examples = None
         self.debug = False
+        self.modelSaving = False
         
         # Task Specific Settings ##############################################
         
@@ -53,6 +54,7 @@ class Task(object):
         self.allowMissing = False # Whether all protein ids in the train/devel/set must exists among the loaded proteins
         self.limitTrainingToAnnotated = False # Remove all proteins which have no annotated terms
         self.annotationFormat = "GO" # 'GO' or 'HPO' annotation file format
+        self.sequenceFormat = {"sequences":"regular", "targets":"cafa"}
     
     ###########################################################################
     # Loading
@@ -83,9 +85,9 @@ class Task(object):
         assert cafaTargets in ("skip", "overlap", "separate", "external")
         self.cafaTargets = cafaTargets
         self.proteins = {}
-        loading.loadFASTA(self.sequencesPath, self.proteins)
+        loading.loadFASTA(self.sequencesPath, self.proteins, self.sequenceFormat["sequences"] == "cafa")
         if cafaTargets != "skip" and self.targetsPath != None:
-            loading.loadFASTA(self.targetsPath, self.proteins, True)
+            loading.loadFASTA(self.targetsPath, self.proteins, self.sequenceFormat["targets"] == "cafa")
         if self.removeNonHuman:
             loading.removeNonHuman(self.proteins)
         assert self.annotationFormat in ("GO", "HPO")
@@ -107,10 +109,11 @@ class Task(object):
     def loadSplit(self, fold=None):
         if self.splitPath == None:
             print "No split to load"
-            for protId in self.proteins.keys():
-                self.proteins[protId]["split"] = "undefined"
         else:
             loading.loadSplit(self.splitPath, self.proteins, self.allowMissing)
+        for protId in self.proteins.keys():
+            if "split" not in self.proteins[protId]:
+                self.proteins[protId]["split"] = "undefined"
 
         if self.remapSets != None:
             for protId in self.proteins.keys():
@@ -144,8 +147,13 @@ class Task(object):
         self.examples = {"labels":[], "features":[], "ids":[], "cafa_ids":[], "sets":[], "label_names":[], "label_size":{}}
         protIds = sorted(self.proteins.keys())
         if limit:
-            protIds = protIds[0:limit]
+            protIds = set(protIds[0:limit])
+            for protId in sorted(self.proteins.keys()):
+                if "cafa" in self.proteins[protId]["sets"]:
+                    protIds.add(protId)
+            protIds = sorted(protIds)
         protObjs = [self.proteins[key] for key in protIds]
+        print "Proteins:", len(protObjs)
         for protein in protObjs:
             # Initialize features
             protein["features"] = {"DUMMY:dummy":1}

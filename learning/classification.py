@@ -30,6 +30,7 @@ def importNamed(name):
 class Classification():
     def __init__(self):
         self.Classifier = None
+        self.modelSaving = False
         
     def getSubset(self, examples, setNames):
         sets = examples["sets"]
@@ -102,6 +103,9 @@ class Classification():
 #         return best
     
     def saveModel(self, clf, outDir, tag):
+        if not self.modelSaving:
+            print "Model '" + tag + "' not saved"
+            return
         modelPath = os.path.join(outDir, tag + "-model.pickle.gz")
         with gzip.open(modelPath, "wb") as f:
             print "Saving model", tag, "as", modelPath

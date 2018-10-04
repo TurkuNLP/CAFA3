@@ -12,7 +12,7 @@ All preprocessing steps and sequence analyses can be run within the directory 's
 
 `python3 target_process.py -o [out_folder] -s [ori_seq]`
 
-The program needs two inputs, the out_folder and the ori_seq. The out_folder should be absolute path ended with '/' for the input ori_seq file/directory and the output features directory. The input ori_seq can be in these four formats (folder of non-compressed fasta files, tar.gz, gz and zip). The sequence analysese include Blast Protein, DeltaBlast, Interproscan5, NetAcet, predGPI, nucPred and Taxonomy hierarchy. All analysis results are in folder called `feature`
+The program needs two inputs, the out_folder and the ori_seq. The out_folder should be absolute path ended with '/' where the input ori_seq file/directory and the output features directory reside. The input ori_seq can be one of these four formats (folder of non-compressed fasta files, tar.gz, gz and zip). The sequence analysese include Blast Protein, DeltaBlast, Interproscan5, NetAcet, predGPI, nucPred and Taxonomy hierarchy. All analysis results are in folder called `feature`.
 
 Running the Feature Generation, Classification and Analysis
 -----------------------------------------------------------

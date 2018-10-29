@@ -104,7 +104,7 @@ def loadPredictionFiles(proteins, predPath, predKey, useCafa, task, predTags, re
     for inPath in inPaths:
         evaluateFile.loadPredictions(proteins, inPath, limitToSets=["devel","test","cafa"] if useCafa else ["devel","test"], readGold=readGold, predKey=predKey, confKey=predKey + "_conf")
     
-def combine(dataPath, inputs, outDir=None, cafaTargets="external", baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True, taskName="cafa3", debug=False):
+def combine(dataPath, inputs, outDir=None, cafaTargets="external", modes="AND,OR", baselineCutoff=1, numTerms=5000, clear=False, useOutFiles=True, taskName="cafa3", debug=False):
     if isinstance(inputs, basestring):
         inputs = [x.strip() for x in inputs.split(",")]
     for i in range(len(inputs)):
@@ -113,6 +113,10 @@ def combine(dataPath, inputs, outDir=None, cafaTargets="external", baselineCutof
             assert len(item) == 3
             item = {"name":item[0], "type":item[1], "path":item[2]}
             inputs[i] = item
+    if isinstance(modes, basestring):
+        modes = [x.strip() for x in modes.split(",")]
+    for mode in modes:
+        assert mode in ("AND", "OR")
     
     if outDir != None:
         if clear and os.path.exists(outDir):
@@ -179,7 +183,7 @@ def combine(dataPath, inputs, outDir=None, cafaTargets="external", baselineCutof
     for i in range(len(combinations)):
         print
         print "******************", "Combination", str(i + 1) + "/" + str(numCombinations), combinations[i], "******************"
-        for mode in (("AND", "OR") if len(combinations[i]) > 1 else ("SINGLE",)):
+        for mode in (modes if len(combinations[i]) > 1 else ("SINGLE",)):
             for setName in (("devel", "test", "cafa") if (cafaTargets != "skip") else ("devel", "test")):
                 combination = combinations[i][:]
                 print
@@ -209,6 +213,7 @@ if __name__=="__main__":
     #optparser.add_option("-c", "--baselineInput", default=None, help="Baseline directory")
     optparser.add_option("-o", "--outDir", default=None, help="Output directory")
     optparser.add_option("-f", "--baselineCutoff", default=1, type=int, help="Cutoff for BLAST baseline predictions. Value in range 1-10, 1 for all values.")
+    optparser.add_option("-m", "--modes", default="AND,OR", help="Input modes, comma-separated list of 'AND' and 'OR'")
     optparser.add_option("-t", "--terms", default=5000, type=int, help="The number of top most common GO terms to use as labels (will override task default)")
     optparser.add_option("-w", "--write", default=False, action="store_true", help="Write output files")
     optparser.add_option("--clear", default=False, action="store_true", help="Remove the output directory if it already exists")
@@ -217,5 +222,5 @@ if __name__=="__main__":
     (options, args) = optparser.parse_args()
     
     combine(dataPath=options.dataPath, inputs=options.inputs, outDir=options.outDir,
-            cafaTargets=options.targets, baselineCutoff=options.baselineCutoff,
+            cafaTargets=options.targets, modes=options.modes, baselineCutoff=options.baselineCutoff,
             numTerms=options.terms, clear=options.clear, useOutFiles=options.write, taskName=options.task)

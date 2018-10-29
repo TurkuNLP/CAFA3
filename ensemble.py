@@ -136,7 +136,6 @@ def combine(dataPath, inputs, outDir=None, cafaTargets="external", modes="AND,OR
     if numTerms != None:
         task.numTerms = numTerms
     print "Task:", taskName
-    #exampleFilePath = os.path.join(outDir, "examples.json.gz")
     task.loadProteins(cafaTargets)
     task.loadSplit()
     limitTerms = set([x[0] for x in task.topTerms])
@@ -150,20 +149,6 @@ def combine(dataPath, inputs, outDir=None, cafaTargets="external", modes="AND,OR
         else:
             assert baselineCutoff >= 1
             loading.loadBaseline(item["path"], task.proteins, item["name"], baselineCutoff, limitTerms=limitTerms, useCafa=cafaTargets != "skip")
-            
-#     if nnInput != None:
-#         print "Loading neural network predictions from", nnInput
-#         loadPredictionFiles(task.proteins, nnInput, "nn_pred", cafaTargets != "skip", task, {"cafa":"_targets", "devel":"_pred", "test":"_pred"}, readGold=False)
-#         predKeys += ["nn_pred"]
-#     if clsInput != None:
-#         print "Loading classifier predictions"
-#         loadPredictionFiles(task.proteins, clsInput, "cls_pred", cafaTargets != "skip", task, {"cafa":"-predictions", "devel":"-predictions", "test":"-predictions"}, readGold=True)
-#         predKeys += ["cls_pred"]
-#     if baselineInput != None:
-#         print "Loading baseline predictions from", baselineInput
-#         assert baselineCutoff >= 1
-#         loading.loadBaseline(baselineInput, task.proteins, "baseline_pred", baselineCutoff, limitTerms=limitTerms, useCafa=cafaTargets != "skip")
-#         predKeys += ["baseline_pred"]
     
     coverage = {x:0 for x in predKeys}
     coverage["total"] = len(task.proteins)
@@ -172,7 +157,6 @@ def combine(dataPath, inputs, outDir=None, cafaTargets="external", modes="AND,OR
             if predKey in task.proteins[protId]:
                 coverage[predKey] += 1
     print "Coverage:", coverage
-    
 
     print "===============", "Combining predictions", "===============" 
     combKey = "comb_pred"
@@ -208,9 +192,6 @@ if __name__=="__main__":
     optparser = OptionParser(description="Ensemble")
     optparser.add_option("-p", "--dataPath", default=os.path.expanduser("~/data/CAFA3/data"), help="Data directory")
     optparser.add_option("-i", "--inputs", default=None, help="Comma separated list of inputs in name:type:path format. Type is one of 'cls' or 'bl' (classifier or baseline). The first input must contain the gold labels.")    
-    #optparser.add_option("-a", "--nnInput", default=None, help="Neural network predictions tsv.gz file")
-    #optparser.add_option("-b", "--clsInput", default=None, help="Classifier predictions tsv.gz file")
-    #optparser.add_option("-c", "--baselineInput", default=None, help="Baseline directory")
     optparser.add_option("-o", "--outDir", default=None, help="Output directory")
     optparser.add_option("-f", "--baselineCutoff", default=1, type=int, help="Cutoff for BLAST baseline predictions. Value in range 1-10, 1 for all values.")
     optparser.add_option("-m", "--modes", default="AND,OR", help="Input modes, comma-separated list of 'AND' and 'OR'")

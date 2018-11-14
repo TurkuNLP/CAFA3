@@ -172,7 +172,7 @@ class Classification():
         print "Best development set results:", metricsToString(best["results"]["average"])
         print getResultsString(best["results"], 20, ["average"])
         if outDir != None:
-            saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives)
+            saveResults(best, os.path.join(outDir, "devel"), examples["label_names"], negatives=negatives, feature_names=examples["feature_names"])
         if useTestSet:
             self.learnSet(best["args"], examples, ["train", "devel"], ["test"], terms, outDir, negatives)
         if useCAFASet:

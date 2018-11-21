@@ -208,7 +208,7 @@ class Task(object):
     
     def train(self, outDir, classifier=None, classifierArgs=None, singleLabelJobs=None, negatives=False, useTestSet=False):
         terms = loading.loadGOTerms(self.termsPath)
-        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv.gz"))
         loading.saveIdNames(self.examples["label_names"], os.path.join(outDir, "labels.tsv"))
         if singleLabelJobs == None:
             cls = Classification()
@@ -220,7 +220,7 @@ class Task(object):
     
     def classify(self, outDir, modelPath, singleLabelJobs=None, negatives=False, useTestSet=False):
         terms = loading.loadGOTerms(self.termsPath)
-        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv"))
+        loading.saveIdNames(self.examples["feature_names"], os.path.join(outDir, "features.tsv.gz"))
         loading.saveIdNames(self.examples["label_names"], os.path.join(outDir, "labels.tsv"))
         if singleLabelJobs == None:
             cls = Classification()

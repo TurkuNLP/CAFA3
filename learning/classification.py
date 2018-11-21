@@ -6,6 +6,7 @@ import os
 # from sklearn.multiclass import _fit_binary
 import numpy as np
 import pickle
+from sklearn.externals import joblib
 import gzip
 
 def importNamed(name):
@@ -30,7 +31,7 @@ def importNamed(name):
 class Classification():
     def __init__(self):
         self.Classifier = None
-        self.modelSaving = False
+        self.modelSaving = "joblib"
         
     def getSubset(self, examples, setNames):
         sets = examples["sets"]
@@ -103,13 +104,19 @@ class Classification():
 #         return best
     
     def saveModel(self, clf, outDir, tag):
-        if not self.modelSaving:
+        if self.modelSaving != None:
+            assert self.modelSaving in ("pickle", "joblib")
+            if self.modelSaving == "pickle":
+                modelPath = os.path.join(outDir, tag + "-model.pickle.gz")
+                with gzip.open(modelPath, "wb") as f:
+                    print "Saving model", tag, "as", modelPath
+                    pickle.dump(clf, f)
+            else:
+                modelPath = os.path.join(outDir, tag + "-model.dump")
+                print "Saving model", tag, "as", modelPath
+                joblib.dump(clf, modelPath, compress=True)
+        else:
             print "Model '" + tag + "' not saved"
-            return
-        modelPath = os.path.join(outDir, tag + "-model.pickle.gz")
-        with gzip.open(modelPath, "wb") as f:
-            print "Saving model", tag, "as", modelPath
-            pickle.dump(clf, f)
     
     def loadModel(self, inDir, tag):
         modelPath = os.path.join(inDir, tag + "-model.pickle.gz")
@@ -122,7 +129,7 @@ class Classification():
         clf, data = self.learn(args, examples, trainSets, testSets, terms, averageOnly=averageOnly, average=average)
         if outDir != None:
             idStr = "_".join(sorted(testSets))
-            saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives)
+            saveResults(data, os.path.join(outDir, idStr), examples["label_names"], negatives=negatives, feature_names=examples["feature_names"])
             self.saveModel(clf, outDir, idStr)
         return clf, data
     

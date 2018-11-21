@@ -180,8 +180,8 @@ def saveResults(data, outStem, label_names, negatives=False, feature_names=None)
         dw.writeheader()
         dw.writerows([{"id":protId, "cafa_ids":",".join(cafa_ids), "gold":np.count_nonzero(gold), "predicted":np.count_nonzero(pred)} for protId, cafa_ids, gold, pred in zip(data["ids"], data["cafa_ids"], data["gold"], data["predicted"])])
     if feature_names != None:
-        print "Writing importances to", outStem + "-importances.tsv"
-        with open(outStem + "-importances.tsv", "wt") as f:
+        print "Writing importances to", outStem + "-importances.tsv.gz"
+        with gzip.open(outStem + "-importances.tsv.gz", "wt") as f:
             dw = csv.DictWriter(f, ["index", "name", "importance"], delimiter='\t')
             dw.writeheader()
             importances = [{"index":i, "name":feature_names[i], "importance":data["feature_importances"][i]} for i in range(len(data["feature_importances"]))]

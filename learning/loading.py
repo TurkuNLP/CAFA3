@@ -273,7 +273,7 @@ def defineSets(proteins, cafaTargets, fold=None, limitTrainingToAnnotated=True):
 
 def saveIdNames(names, outPath):
     print "Saving id names to", outPath
-    with open(outPath, "wt") as f:
+    with (gzip.open(outPath, "wt") if outPath.endswith(".gz") else open(outPath, "wt")) as f:
         f.write("index\tname\n")
         for i in range(len(names)):
             f.write(str(i) + "\t" + names[i] + "\n")
@@ -281,7 +281,7 @@ def saveIdNames(names, outPath):
 def loadIdNames(inPath):
     print "Loading id names from", inPath
     idNames = {} 
-    with open(inPath, "rt") as f:
+    with (gzip.open(inPath, "rt") if inPath.endswith(".gz") else open(inPath, "rt")) as f:
         reader = csv.DictReader(f, delimiter='\t')
         for line in reader:
             index = int(line["index"])
@@ -319,7 +319,7 @@ def vectorizeExamples(examples, featureGroups=None, sparseLabels=False, idPath=N
         print "Vectorizing features"
         dv = DictVectorizer(sparse=True)
         if idPath != None:
-            featureIdPath = os.path.join(idPath, "features.tsv")
+            featureIdPath = os.path.join(idPath, "features.tsv.gz")
             print "Vectorizing features with existing ids from", featureIdPath
             featureNames = loadIdNames(featureIdPath)
             #dv.fit([featureNames])

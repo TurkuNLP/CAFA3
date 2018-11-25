@@ -24,9 +24,10 @@ def readCSVs(pathPattern, columns, sortBy=None, delimiter="\t"):
                 row = rowById[rowId]
                 for key in line:
                     if key != idName:
-                        row[key].append(columns[key]["type"](line[key]))
+                        line[key] = columns[key]["type"](line[key])
+                        row[key].append(line[key])
                     else:
-                        row[key] = idName
+                        row[key] = line[key]
                 rowById[rowId] = row
                 fileRows.append(line)
             if sortBy != None:
@@ -37,6 +38,8 @@ def readCSVs(pathPattern, columns, sortBy=None, delimiter="\t"):
                     fileRow["rank"] = rank
                     rowById[fileRow[idName]]["rank"].append(rank)
                     rank += 1
+    #if sortBy != None:
+    #    rows.sort(key=lambda x: min(x["rank"]))
     return rows
 
 def mergeRows(rows, columns):
@@ -46,8 +49,16 @@ def mergeRows(rows, columns):
         for key in keys:
             if key not in columns or columns[key]["action"] == "mean":
                 row[key] = sum(x for x in row[key]) / len(row[key])
+            elif columns[key]["action"] == "max":
+                row[key] = max(row[key])
+            elif columns[key]["action"] == "min":
+                row[key] = min(row[key])
             elif columns[key]["action"] == "id":
                 pass
+            elif columns[key]["action"] == "unique":
+                values = set(row[key])
+                assert len(values) == 1, row
+                row[key] = list(values)[0]
             elif columns[key]["action"] == "range":
                 minVal = min(row[key])
                 maxVal = max(row[key])
@@ -90,6 +101,9 @@ def mergeCSVs(pathPattern, outPath, columns, sortBy=None, delimiter="\t"):
         print "No input rows"
         return
     rows = mergeRows(rows, columns)
+    if sortBy != None:
+        print "Sorting results by column", sortBy
+        rows.sort(key=lambda x: x["importance"], reverse=True)
     print "Saving results to", outPath
     with (gzip.open(outPath, "wt") if outPath.endswith(".gz") else open(outPath, "wt")) as f:
         writer = csv.DictWriter(f, fieldnames=sorted(columns.keys()), delimiter=delimiter)

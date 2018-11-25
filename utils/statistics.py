@@ -1,8 +1,14 @@
 import os
 import numpy
 from collections import defaultdict
-import matplotlib.pyplot as plt
 from sklearn.feature_extraction.dict_vectorizer import DictVectorizer
+
+# From https://stackoverflow.com/questions/37604289/tkinter-tclerror-no-display-name-and-no-display-environment-variable
+import matplotlib
+if os.environ.get('DISPLAY','') == '':
+    print('no display found. Using non-interactive Agg backend')
+    matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 def getCategories(sets):
     categories = sets

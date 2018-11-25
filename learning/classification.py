@@ -114,7 +114,7 @@ class Classification():
             else:
                 modelPath = os.path.join(outDir, tag + "-model.dump")
                 print "Saving model", tag, "as", modelPath
-                joblib.dump(clf, modelPath, compress=True)
+                joblib.dump(clf, modelPath, compress=9)
         else:
             print "Model '" + tag + "' not saved"
     

@@ -269,6 +269,7 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
             assert action in ("build", "train", "classify", "statistics")
     else:
         actions = ["build", "train", "statistics"]
+    assert not("train" in actions and "classify" in actions)
     
     # Run the requested actions
     exampleFilePath = os.path.join(outDir, "examples.json.gz")
@@ -287,6 +288,10 @@ def run(dataPath, outDir=None, actions=None, featureGroups=None, classifier=None
         task.train(outDir, classifier, classifierArgs, singleLabelJobs, negatives, useTestSet)
     if "classify" in actions:
         print "==========", "Classifying Examples", "=========="
+        if modelPath == None:
+            raise Exception("Model path not defined")
+        if outDir == modelPath:
+            raise Exception("Output directory is the same as the model path")
         print "Classification model path:", modelPath
         task.vectorizeExamples(modelPath)
         task.classify(outDir, modelPath, singleLabelJobs, negatives, useTestSet)
@@ -307,7 +312,7 @@ if __name__=="__main__":
     optparser.add_option("-t", "--terms", default=None, type=int, help="Override the task limit for the number of top most common GO terms to use as labels")
     optparser.add_option("-o", "--output", default=None, help="The output directory")
     optparser.add_option('-c','--classifier', help='', default="ensemble.RandomForestClassifier")
-    optparser.add_option('-m','--modelPath', help='', default="A directory with pickled model files and feature ids. Only used with the 'classify' action.")
+    optparser.add_option('-m','--modelPath', default=None, help="A directory with pickled model files and feature ids. Only used with the 'classify' action.")
     optparser.add_option('-r','--args', help='', default="{'random_state':[1], 'n_estimators':[10], 'n_jobs':[1], 'verbose':[3]}")
     #optparser.add_option("--multioutputclassifier", default=False, action="store_true", help="Use the MultiOutputClassifier to train a separate classifier for each label")
     optparser.add_option("--singleLabelJobs", default=None, type=int, help="Number of jobs for SingleLabelClassification")

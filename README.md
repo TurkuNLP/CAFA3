@@ -28,6 +28,7 @@ Making predictions with the neural model
 ----------------------------------------
 
 cd neural
+
 python3 predict_new.py ./features_only/ ./data/devel_sequences.fasta.gz ./data/examples.json.gz ./devel_predictions.tsv.gz
 
 This will use the trained model from ./features_only/ directory and make predictions for the target sequences. The input fasta file should not contain linebreaks within the sequences. examples.json.gz contains the pre-generated features. The last parameter is the output path.

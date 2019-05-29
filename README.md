@@ -29,6 +29,8 @@ Making predictions with the neural model
 
 cd neural
 
+Download and extract data (data.tar.gz) and model files (features_only.tar.gz) from https://github.com/TurkuNLP/CAFA3/releases/tag/v0.0
+
 python3 predict_new.py ./features_only/ ./data/devel_sequences.fasta.gz ./data/examples.json.gz ./devel_predictions.tsv.gz
 
 This will use the trained model from ./features_only/ directory and make predictions for the target sequences. The input fasta file should not contain linebreaks within the sequences. examples.json.gz contains the pre-generated features. The last parameter is the output path.

@@ -24,6 +24,14 @@ The run.py program can be called like this:
 
 The `[TASK]` value can be one of `cafa3`, `cafa3hpo` or `cafapi`. Depending on task, different input files are used. The `--targets` option defines how to handle CAFA targets.
 
+Making predictions with the neural model
+----------------------------------------
+
+cd neural
+python3 predict_new.py ./features_only/ ./data/devel_sequences.fasta.gz ./data/examples.json.gz ./devel_predictions.tsv.gz
+
+This will use the trained model from ./features_only/ directory and make predictions for the target sequences. The input fasta file should not contain linebreaks within the sequences. examples.json.gz contains the pre-generated features. The last parameter is the output path.
+
 Cross-validation
 ----------------
 By default, the scikit-learn classification will use the train/devel/test split for the learning data. To use n-fold cross-validation instead, use the `--fold` option of `run.py`. To do 10-fold cross-validation, the program can be run 10 times using a script like this:

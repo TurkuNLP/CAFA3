@@ -4,7 +4,7 @@ Calculates simple statistics from the Swissprot and GO data.
 import gzip
 import numpy
 from collections import defaultdict
-from itertools import izip
+
 import sys
 
 def stats(ann_path='./data/Swissprot_evidence.tsv.gz'):
@@ -25,19 +25,19 @@ def stats(ann_path='./data/Swissprot_evidence.tsv.gz'):
         proteins[prot_id] +=1
 
         
-    print 'Unique annotations: %s, occurrences: %s, mean: %s, median: %s, max: %s' % (len(annotations.keys()), sum(annotations.values()), numpy.mean(annotations.values()), numpy.median(annotations.values()), max(annotations.values()))
-    print 'Unique proteins: %s' % len(proteins)
-    print 'Annotations per protein, mean: %s, median: %s, max: %s' % (numpy.mean(proteins.values()), numpy.median(proteins.values()), max(proteins.values()))
+    print('Unique annotations: %s, occurrences: %s, mean: %s, median: %s, max: %s' % (len(list(annotations.keys())), sum(annotations.values()), numpy.mean(list(annotations.values())), numpy.median(list(annotations.values())), max(annotations.values())))
+    print('Unique proteins: %s' % len(proteins))
+    print('Annotations per protein, mean: %s, median: %s, max: %s' % (numpy.mean(list(proteins.values())), numpy.median(list(proteins.values())), max(proteins.values())))
     
-    print 'Top N annotations cover (Nth only):'
+    print('Top N annotations cover (Nth only):')
     for i in [1, 2, 3, 4, 5, 10, 100, 1000, 2500, 4000, 5000, 10000, 20000]:
-        top = sum(sorted(annotations.values(), reverse=True)[:i])
-        nth = sorted(annotations.values(), reverse=True)[i-1]
-        print '%s: %s, (%s)' % (i, float(top)/sum(annotations.values()), nth)
+        top = sum(sorted(list(annotations.values()), reverse=True)[:i])
+        nth = sorted(list(annotations.values()), reverse=True)[i-1]
+        print('%s: %s, (%s)' % (i, float(top)/sum(annotations.values()), nth))
     
-    print 'Evidence counts:'
+    print('Evidence counts:')
     for ev, count in sorted(evidences.items()):
-        print '%s\t%s' % (ev, count)
+        print('%s\t%s' % (ev, count))
     
     seq_lengths = []
     characters = set()
@@ -50,19 +50,19 @@ def stats(ann_path='./data/Swissprot_evidence.tsv.gz'):
         #if len(seq) > 30000:
         #    import pdb; pdb.set_trace()
     
-    print 'Unique amino acids: %s' % len(characters)
-    print 'Sequence length, mean: %s, median: %s, min: %s, max: %s' % (numpy.mean(seq_lengths), numpy.median(seq_lengths), min(seq_lengths), max(seq_lengths))
-    print 'Acids: %s' % ''.join(sorted(characters))
+    print('Unique amino acids: %s' % len(characters))
+    print('Sequence length, mean: %s, median: %s, min: %s, max: %s' % (numpy.mean(seq_lengths), numpy.median(seq_lengths), min(seq_lengths), max(seq_lengths)))
+    print('Acids: %s' % ''.join(sorted(characters)))
     
-    print 'Sequences of length N or smaller cover:'
+    print('Sequences of length N or smaller cover:')
     for i in [10, 100, 500, 1000, 2500, 5000, 10000]:
         seq_count = len([1 for s in seq_lengths if s <= i])
-        print '%s\t%s' % (i, float(seq_count)/len(seq_lengths))
+        print('%s\t%s' % (i, float(seq_count)/len(seq_lengths)))
 
 def pairwise(iterable):
     "s -> (s0, s1), (s2, s3), (s4, s5), ..."
     a = iter(iterable)
-    return izip(a, a)
+    return zip(a, a)
     
 if __name__ == '__main__':
     stats(sys.argv[1])
